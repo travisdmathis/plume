@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type ComputeNode from "three/src/nodes/gpgpu/ComputeNode.js";
 import type { WebGPURenderer } from "three/webgpu";
 import { System, type SystemDef } from "./system.js";
 
@@ -103,6 +104,8 @@ export class Manager {
   private _cullSphere = new THREE.Sphere();
   private _cameraWorldPos = new THREE.Vector3();
   private _systemWorldPos = new THREE.Vector3();
+  // Shared compute batch; cleared + refilled each step, flushed as one `computeAsync`.
+  private _batchBuffer: ComputeNode[] = [];
 
   constructor(options: ManagerOptions) {
     this.renderer = options.renderer;
@@ -124,16 +127,25 @@ export class Manager {
     this._prefabs.set(id, def);
   }
 
-  /** Preload `count` pooled instances of a prefab for hot spawning. */
-  preload(id: string, count = 1): void {
+  /**
+   * Preload pooled instances of a prefab for hot spawning — also warms their compute
+   * pipelines so the first real spawn doesn't stall. Respects `maxPoolPer`; if `count` is
+   * higher, the pool is capped and the rest are discarded. Call this for prefabs you plan
+   * to spawn in bursts (e.g. a wave of explosions) so the user doesn't see a compile hitch.
+   */
+  async preload(id: string, count = 1): Promise<void> {
     const input = this._prefabs.get(id);
     if (!input) throw new Error(`plume: prefab "${id}" not registered`);
     const pool = this._getPool(id);
-    while (pool.length < Math.min(count, this.maxPoolPer)) {
+    const target = Math.min(count, this.maxPoolPer);
+    const warmups: Promise<void>[] = [];
+    while (pool.length < target) {
       const sys = this._createSystem(input);
+      warmups.push(sys.warmup(this.renderer));
       sys.hardStop();
       pool.push(sys);
     }
+    await Promise.all(warmups);
   }
 
   /**
@@ -298,6 +310,12 @@ export class Manager {
       frustumReady = true;
     }
 
+    // Shared compute batch: every active system's emitter frame kernels collect into this
+    // single array so we can fire one `renderer.computeAsync([...])` at the end — reduces
+    // per-frame command-buffer submits from O(systems) to 1. Empty at start, flushed below.
+    const batch: ComputeNode[] = this._batchBuffer;
+    batch.length = 0;
+
     // Iterate backwards so we can splice completed entries
     for (let i = this._active.length - 1; i >= 0; i--) {
       const entry = this._active[i]!;
@@ -326,7 +344,9 @@ export class Manager {
       }
       sys.object3D.visible = visible;
 
-      sys.tick(this.renderer, deltaTime, intensity * lodScale, cam);
+      // Pass the shared batch so the emitters push their reset/update/spawn kernels into
+      // it instead of dispatching. We flush once after the loop.
+      sys.tick(this.renderer, deltaTime, intensity * lodScale, cam, batch);
       if (cam) sys.syncRender(cam, intensity * lodScale);
 
       if (!sys.isAlive()) {
@@ -341,6 +361,9 @@ export class Manager {
         this._active.splice(i, 1);
       }
     }
+
+    // Single GPU submit for every active system's frame kernels.
+    if (batch.length > 0) void this.renderer.computeAsync(batch);
   }
 
   /** Hard-stop every active system and return them to the pool. */

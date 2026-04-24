@@ -28,6 +28,12 @@ side is a thin orchestrator that wires compose-able modules into each emitter.
 - **LOD + frustum culling** — per-spawn distance fade + bounding-sphere cull. Far systems
   scale intensity down to zero; off-screen systems flip `visible` off so the renderer skips
   them entirely.
+- **Batched compute dispatch** — every active system's per-frame kernels (reset + update +
+  spawn) coalesce into one `computeAsync([...])` call per tick, so GPU submits stay at 1
+  regardless of active system count.
+- **Pool warmup** — `Manager.preload(id, count)` pre-creates pooled instances AND dispatches
+  their compute kernels once, so the first burst spawn of a heavy prefab doesn't stall on
+  WGSL → MSL pipeline compilation.
 - **Shader dump** — export every generated compute + render WGSL for debugging.
 
 ## Quick start

@@ -150,7 +150,9 @@ renderPipeline.outputNode = scenePass.add(bloomPass);
 // Plume manager + prefabs
 // ────────────────────────────────────────────────────────────────────────────
 
-const manager = new Manager({ renderer, scene, camera, maxActive: 128 });
+// `maxPoolPer: 64` is sized so the LOD-grid demo (49 fountains) can pop entirely from the
+// pool instead of constructing fresh Systems mid-click — avoids a compile storm.
+const manager = new Manager({ renderer, scene, camera, maxActive: 128, maxPoolPer: 64 });
 
 /** Fiery explosion — flash + fire burst + dense rising smoke. */
 function explosionDef(): SystemDef {
@@ -933,10 +935,12 @@ manager.register("sdf_bouncer", sdfBouncerDef);
 
 // Pre-compile every prefab's compute kernels. Without this, the first spawn of a heavy
 // emitter (smoke_puff with sortByDepth especially) stalls for seconds while the WebGPU
-// driver translates WGSL → MSL/HLSL.
+// driver translates WGSL → MSL/HLSL. Then also pre-pool 49 sparkle fountains because the
+// LOD-grid demo spawns that many at once — pool hits avoid a compile storm mid-click.
 console.info("plume: warming up compute pipelines...");
-manager
+void manager
   .warmup()
+  .then(() => manager.preload("sparkle_fountain", 49))
   .then(() => console.info("plume: warmup complete"))
   .catch((err: unknown) => console.error("plume: warmup failed", err));
 
@@ -1024,10 +1028,16 @@ document.getElementById("btn-sdf-bouncer")!.addEventListener("click", () => {
 });
 
 // R10 LOD demo — spawn a 7×7 grid of the sparkle fountain preset across a wide area. Each
-// one is given a `lod` config that fades intensity to zero past 18 units and culls past
-// the frustum for any at-a-glance perf win. Orbit out and watch distant fountains thin out;
-// pan around and ones behind the camera drop to zero cost.
+// one is given a `lod` config that fades intensity to zero past 20 units and culls past
+// the frustum. Orbit out and watch distant fountains thin out; pan around and ones behind
+// the camera drop to zero cost.
+//
+// We clear active systems first so every click reuses the 49 pre-warmed pool instances.
+// Without this, a second click while the first wave is still alive would allocate 49 fresh
+// Systems whose compute pipelines compile mid-frame (the ~100ms rAF stall we saw in R10
+// bring-up).
 document.getElementById("btn-lod-grid")!.addEventListener("click", () => {
+  manager.clear();
   const step = 5;
   const n = 7; // 7×7 = 49 systems
   const half = ((n - 1) * step) / 2;
@@ -1039,9 +1049,7 @@ document.getElementById("btn-lod-grid")!.addEventListener("click", () => {
       const sys = manager.spawn("sparkle_fountain", {
         position: new THREE.Vector3(x, 0, z),
         lod: {
-          // Bounding sphere big enough to cover the fountain's spread.
           bounds: 2.5,
-          // Full intensity within 10m; linear fade out to zero by 20m.
           farFadeStart: 10,
           maxDistance: 20,
         },

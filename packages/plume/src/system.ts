@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type ComputeNode from "three/src/nodes/gpgpu/ComputeNode.js";
 import type { WebGPURenderer } from "three/webgpu";
 import { Emitter, type EmitterDef } from "./emitter.js";
 import type { RenderContext } from "./modules/module.js";
@@ -69,12 +70,20 @@ export class System {
     this.intensity = Math.max(0, value);
   }
 
-  /** Update all emitters. Renderer is passed through for GPU compute dispatch. */
+  /**
+   * Update all emitters. Renderer is passed through for GPU compute dispatch.
+   *
+   * If `batch` is provided, emitter frame kernels are collected into it instead of being
+   * dispatched inline — the Manager uses this to coalesce every active system's kernels
+   * into a single `renderer.computeAsync([...])` call per tick, cutting per-frame command-
+   * buffer submits from O(systems) down to O(1).
+   */
   tick(
     renderer: WebGPURenderer,
     deltaTime: number,
     parentIntensity: number,
     camera?: THREE.Camera,
+    batch?: ComputeNode[],
   ): void {
     if (!this._playing) return;
     this._systemTime += deltaTime;
@@ -92,7 +101,7 @@ export class System {
     const effectiveIntensity = parentIntensity * this.intensity;
 
     for (const em of this.emitters)
-      em.tick(renderer, deltaTime, this._worldMatrix, effectiveIntensity, camera);
+      em.tick(renderer, deltaTime, this._worldMatrix, effectiveIntensity, camera, batch);
 
     if (!this.isAlive()) this._playing = false;
   }

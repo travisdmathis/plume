@@ -284,6 +284,16 @@ export class Emitter {
     worldMatrix: THREE.Matrix4,
     intensity: number,
     camera?: THREE.Camera,
+    /**
+     * Optional shared compute batch. When provided, this emitter's frame kernels (reset/update
+     * /spawn) are pushed into it instead of dispatched immediately — the caller (Manager) is
+     * responsible for `renderer.computeAsync(batch)` at the end of the tick. This cuts per-frame
+     * command-buffer submits from O(emitters) down to 1 when ticking many systems.
+     *
+     * postUpdate (ribbon/light-emission) and sort dispatches stay out-of-batch because they
+     * depend on conditional internal state the outer caller can't observe.
+     */
+    batch?: ComputeNode[],
   ): void {
     if (!this._playing) return;
 
@@ -304,21 +314,22 @@ export class Emitter {
     this.uIntensity.value = intensity;
     this.uWorldMatrix.value.copy(worldMatrix);
 
-    // Reset event counter BEFORE update so new events are counted from zero this frame.
-    // Listener emitters that consumed last frame's events have already done so by now
-    // (they were ticked by the System before us, or in a prior frame).
-    if (this._resetEventKernel) {
-      void renderer.computeAsync(this._resetEventKernel);
-    }
-
     // Fire per-module beforeUpdate hooks so modules that need per-frame uniform sync
     // (e.g. camera matrices for depth-buffer collision) can refresh before the kernel runs.
     for (const m of this.update) m.beforeUpdate?.(deltaTime, camera);
 
+    // Collect reset/update/spawn kernels into the caller's batch if one was passed, or a
+    // local batch otherwise. Order within the batch matters: reset → update → spawn.
+    const ownsBatch = batch === undefined;
+    const dispatch = ownsBatch ? ([] as ComputeNode[]) : batch!;
+
+    // Reset event counter BEFORE update so new events are counted from zero this frame.
+    if (this._resetEventKernel) dispatch.push(this._resetEventKernel);
+
     // Update pass
     if (this._aliveHighWater > 0) {
       this._updateKernel.count = this._aliveHighWater;
-      void renderer.computeAsync(this._updateKernel);
+      dispatch.push(this._updateKernel);
     }
 
     // Spawn pass
@@ -343,16 +354,23 @@ export class Emitter {
         }
 
         this._spawnKernel.count = spawnCount;
-        void renderer.computeAsync(this._spawnKernel);
+        dispatch.push(this._spawnKernel);
       }
     }
 
+    // If we own the batch (no caller-provided one), fire it now. Otherwise leave it to
+    // the caller to flush after every emitter has contributed its kernels.
+    if (ownsBatch && dispatch.length > 0) void renderer.computeAsync(dispatch);
+
     // Post-update hook for render modules that need per-frame compute work (e.g., ribbons).
+    // These own their own `computeAsync` call because they dispatch conditionally on internal
+    // state (history head, readback readiness) that the emitter can't observe.
     if (this.render.postUpdate && this._aliveHighWater > 0) {
       this.render.postUpdate(renderer, this._aliveHighWater);
     }
 
     // Depth-sort pass — runs after all state updates, before render draws this frame.
+    // BitonicSort.compute() internally chains its own kernels so it stays standalone.
     if (this._sortEnabled && this._aliveHighWater > 0 && camera && this._uCameraView) {
       camera.updateMatrixWorld();
       this._uCameraView.value.copy(camera.matrixWorldInverse);
