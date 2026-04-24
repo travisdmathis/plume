@@ -1,4 +1,4 @@
-import type * as THREE from "three";
+import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { System, type SystemDef } from "./system.js";
 
@@ -40,17 +40,41 @@ export interface ManagerOptions {
   maxAccumulatedTime?: number;
 }
 
+/**
+ * Level-of-detail config attached to an active system. The Manager computes distance from
+ * the camera each tick and scales intensity / toggles visibility accordingly:
+ *
+ * - `bounds`: radius of the bounding sphere centered at the system's world position, used
+ *   for frustum culling. If unset, frustum culling is skipped for this system.
+ * - `farFadeStart` + `maxDistance`: linear intensity ramp from 1.0 at `farFadeStart` down
+ *   to 0.0 at `maxDistance`. Past `maxDistance` intensity stays at 0, which stops new
+ *   particles from spawning — the system drains naturally as existing particles expire.
+ *
+ * Leaving `lod` unset preserves today's always-full-intensity, always-visible behavior.
+ */
+export interface SystemCulling {
+  /** Bounding-sphere radius at system origin for frustum culling. If unset, no frustum test. */
+  bounds?: number;
+  /** Distance at which the intensity fade begins. Default = `maxDistance` (no fade, hard cutoff). */
+  farFadeStart?: number;
+  /** Distance at/past which intensity reaches 0 and no new particles spawn. */
+  maxDistance?: number;
+}
+
 export interface SpawnOptions {
   position?: THREE.Vector3Like;
   quaternion?: THREE.QuaternionLike;
   scale?: THREE.Vector3Like | number;
   intensity?: number;
   parent?: THREE.Object3D;
+  /** Distance-based LOD + frustum culling config. See {@link SystemCulling}. */
+  lod?: SystemCulling;
 }
 
 interface ActiveEntry {
   id: string;
   system: System;
+  lod?: SystemCulling;
 }
 
 /**
@@ -71,6 +95,14 @@ export class Manager {
   private _pool = new Map<string, System[]>();
   private _active: ActiveEntry[] = [];
   private _accum = 0;
+
+  // Reused per-tick scratch for LOD / culling. Kept as instance fields so we don't allocate
+  // every frame; the Manager is single-threaded per JS runtime so no aliasing concern.
+  private _frustum = new THREE.Frustum();
+  private _frustumMatrix = new THREE.Matrix4();
+  private _cullSphere = new THREE.Sphere();
+  private _cameraWorldPos = new THREE.Vector3();
+  private _systemWorldPos = new THREE.Vector3();
 
   constructor(options: ManagerOptions) {
     this.renderer = options.renderer;
@@ -219,7 +251,7 @@ export class Manager {
     parent.add(system.object3D);
 
     system.play();
-    this._active.push({ id, system });
+    this._active.push({ id, system, lod: options.lod });
     return system;
   }
 
@@ -254,12 +286,48 @@ export class Manager {
   }
 
   private _stepOnce(deltaTime: number, intensity: number, cam: THREE.Camera | undefined): void {
+    // Rebuild frustum once per step from the camera — every system's bounding sphere tests
+    // against this single frustum. `Frustum.setFromProjectionMatrix` wants
+    // viewProjection = projection * viewInverse.
+    let frustumReady = false;
+    if (cam) {
+      cam.updateMatrixWorld();
+      this._frustumMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      this._frustum.setFromProjectionMatrix(this._frustumMatrix);
+      cam.getWorldPosition(this._cameraWorldPos);
+      frustumReady = true;
+    }
+
     // Iterate backwards so we can splice completed entries
     for (let i = this._active.length - 1; i >= 0; i--) {
       const entry = this._active[i]!;
       const sys = entry.system;
-      sys.tick(this.renderer, deltaTime, intensity, cam);
-      if (cam) sys.syncRender(cam, intensity);
+
+      // LOD: compute intensity scale + visibility from distance and frustum. Systems without
+      // a `lod` config just get `intensity` straight through and stay visible.
+      let lodScale = 1;
+      let visible = true;
+      if (entry.lod && frustumReady) {
+        sys.object3D.getWorldPosition(this._systemWorldPos);
+        const dist = this._cameraWorldPos.distanceTo(this._systemWorldPos);
+        const maxDist = entry.lod.maxDistance;
+        if (maxDist !== undefined) {
+          const fadeStart = entry.lod.farFadeStart ?? maxDist;
+          if (dist >= maxDist) {
+            lodScale = 0;
+          } else if (dist > fadeStart && maxDist > fadeStart) {
+            lodScale = 1 - (dist - fadeStart) / (maxDist - fadeStart);
+          }
+        }
+        if (entry.lod.bounds !== undefined) {
+          this._cullSphere.set(this._systemWorldPos, entry.lod.bounds);
+          visible = this._frustum.intersectsSphere(this._cullSphere);
+        }
+      }
+      sys.object3D.visible = visible;
+
+      sys.tick(this.renderer, deltaTime, intensity * lodScale, cam);
+      if (cam) sys.syncRender(cam, intensity * lodScale);
 
       if (!sys.isAlive()) {
         // Retire to pool

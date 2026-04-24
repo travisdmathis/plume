@@ -150,7 +150,7 @@ renderPipeline.outputNode = scenePass.add(bloomPass);
 // Plume manager + prefabs
 // ────────────────────────────────────────────────────────────────────────────
 
-const manager = new Manager({ renderer, scene, camera, maxActive: 64 });
+const manager = new Manager({ renderer, scene, camera, maxActive: 128 });
 
 /** Fiery explosion — flash + fire burst + dense rising smoke. */
 function explosionDef(): SystemDef {
@@ -1021,6 +1021,35 @@ document.getElementById("btn-rain")!.addEventListener("click", () => {
 
 document.getElementById("btn-sdf-bouncer")!.addEventListener("click", () => {
   manager.spawn("sdf_bouncer", { position: new THREE.Vector3(0, 6, 0) });
+});
+
+// R10 LOD demo — spawn a 7×7 grid of the sparkle fountain preset across a wide area. Each
+// one is given a `lod` config that fades intensity to zero past 18 units and culls past
+// the frustum for any at-a-glance perf win. Orbit out and watch distant fountains thin out;
+// pan around and ones behind the camera drop to zero cost.
+document.getElementById("btn-lod-grid")!.addEventListener("click", () => {
+  const step = 5;
+  const n = 7; // 7×7 = 49 systems
+  const half = ((n - 1) * step) / 2;
+  let spawned = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const x = i * step - half;
+      const z = j * step - half;
+      const sys = manager.spawn("sparkle_fountain", {
+        position: new THREE.Vector3(x, 0, z),
+        lod: {
+          // Bounding sphere big enough to cover the fountain's spread.
+          bounds: 2.5,
+          // Full intensity within 10m; linear fade out to zero by 20m.
+          farFadeStart: 10,
+          maxDistance: 20,
+        },
+      });
+      if (sys) spawned++;
+    }
+  }
+  console.info(`plume: spawned ${spawned} LOD-gated fountains — orbit to see fade/culling`);
 });
 
 document.getElementById("btn-seeded-twin")!.addEventListener("click", () => {

@@ -146,7 +146,7 @@ export type { EmitterDef, EmitterEventConfig } from "./emitter.js";
 export { System } from "./system.js";
 export type { SystemDef } from "./system.js";
 export { Manager } from "./manager.js";
-export type { ManagerOptions, SpawnOptions } from "./manager.js";
+export type { ManagerOptions, SpawnOptions, SystemCulling } from "./manager.js";
 
 // Serialization
 export {

@@ -25,6 +25,9 @@ side is a thin orchestrator that wires compose-able modules into each emitter.
   on packed (depth, slot-index) keys.
 - **Fluent authoring API** — builder pattern; emitter + system defs compose as one chain.
 - **Seeded determinism** — seeded emitters replay identically given a fixed timestep.
+- **LOD + frustum culling** — per-spawn distance fade + bounding-sphere cull. Far systems
+  scale intensity down to zero; off-screen systems flip `visible` off so the renderer skips
+  them entirely.
 - **Shader dump** — export every generated compute + render WGSL for debugging.
 
 ## Quick start
@@ -113,8 +116,8 @@ pnpm dev
 
 Opens [`examples/playground`](./examples/playground) — every feature above has a
 demo button (explosion, smoke, orb, fountain, ribbons, tornado, plasma beams, ember
-swarm, mesh-volume portal, depth-collision rain, SDF bouncer, fireworks with sub-emitters,
-seeded determinism twin, shader dump).
+swarm, mesh-volume portal, depth-collision rain, SDF bouncer, LOD grid, fireworks
+with sub-emitters, seeded determinism twin, shader dump).
 
 ## Packages
 
