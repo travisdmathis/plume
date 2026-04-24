@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plume · Playground</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #0b0c10;
+        color: #e7e7e9;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          sans-serif;
+        overflow: hidden;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      canvas {
+        display: block;
+      }
+      #hud {
+        position: fixed;
+        left: 16px;
+        top: 16px;
+        padding: 12px 14px;
+        background: rgba(10, 12, 16, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        backdrop-filter: blur(8px);
+        max-width: 320px;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      #hud h1 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #9ae6b4;
+      }
+      #hud p {
+        margin: 4px 0;
+        color: #a0a4ad;
+      }
+      #hud button {
+        margin-top: 8px;
+        margin-right: 6px;
+        padding: 6px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        color: inherit;
+        border-radius: 6px;
+        cursor: pointer;
+        font: inherit;
+      }
+      #hud button:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      kbd {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud">
+      <h1>Plume Playground</h1>
+      <p>Press <kbd>Space</kbd> to fire an explosion at origin, or use the buttons below.</p>
+      <p id="stats">–</p>
+      <button id="btn-explosion">Explosion</button>
+      <button id="btn-smoke">Smoke puff</button>
+      <button id="btn-orb">Magic orb</button>
+      <button id="btn-fountain">Sparkle fountain</button>
+      <button id="btn-firework">Firework</button>
+      <button id="btn-debris">Debris (mesh)</button>
+      <button id="btn-comets">Comets (ribbon)</button>
+      <button id="btn-tornado">Tornado (vortex + curl)</button>
+      <button id="btn-beams">Plasma beams</button>
+      <button id="btn-embers">Ember swarm (lights)</button>
+      <button id="btn-seeded-twin">Seeded spawn</button>
+      <button id="btn-mesh-volume">Portal (volume mesh)</button>
+      <button id="btn-rain">Rain (depth collision)</button>
+      <button id="btn-sdf-bouncer">SDF bouncer</button>
+      <button id="btn-dump-shaders">Dump shaders</button>
+      <button id="btn-clear">Clear</button>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

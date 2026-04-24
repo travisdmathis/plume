@@ -1,0 +1,54 @@
+{
+  "name": "plume",
+  "version": "0.1.0",
+  "description": "Niagara-equivalent VFX system for three.js",
+  "keywords": [
+    "three",
+    "threejs",
+    "vfx",
+    "particles",
+    "niagara",
+    "gpu",
+    "webgpu",
+    "tsl"
+  ],
+  "license": "MIT",
+  "author": "Travis Mathis",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./dist/modules/**/*.js",
+    "./dist/index.js"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.184.0",
+    "three": "^0.184.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
