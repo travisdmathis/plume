@@ -1,0 +1,26 @@
+{
+  "name": "plume-editor",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Visual node editor for the Plume VFX system. Svelte + @xyflow/svelte; graph compiles to a SystemDef live-previewed in a side three.js viewport.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@xyflow/svelte": "^1.1.0",
+    "plume": "workspace:*",
+    "svelte": "^5.20.0",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@types/three": "^0.184.0",
+    "svelte-check": "^4.1.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}
