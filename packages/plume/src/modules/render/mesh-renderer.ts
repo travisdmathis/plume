@@ -23,8 +23,17 @@ export interface MeshRendererParams {
   geometry: THREE.BufferGeometry;
   /**
    * Material applied to every instance. MUST be a `NodeMaterial` (MeshBasicNodeMaterial,
-   * MeshStandardNodeMaterial, etc.) — this renderer overrides its `positionNode` and
-   * `normalNode`. If omitted, a default unlit white material is used.
+   * MeshStandardNodeMaterial, etc.).
+   *
+   * The renderer needs to override `positionNode` / `normalNode` to apply per-particle
+   * world-space transforms. To preserve user-supplied vertex deformation, the renderer
+   * COMPOSES with the previous values when present: if you set `material.positionNode`
+   * before passing it in, your custom local-space position is read first and then placed +
+   * rotated by the particle transform. Same applies for `normalNode`. This means a custom
+   * standard material with vertex animation, displacement, etc. works unchanged through the
+   * renderer — your shading is intact, plus per-particle motion.
+   *
+   * If omitted, a default unlit white material is used.
    */
   material?: NodeMaterial;
   renderOrder?: number;
@@ -77,7 +86,16 @@ export class MeshRenderer implements RenderModule {
   }
 
   init(storage: ParticleStorage, capacity: number): void {
-    const mat = this._material;
+    const mat = this._material as NodeMaterial & {
+      positionNode?: Node<"vec3"> | null;
+      normalNode?: Node<"vec3"> | null;
+    };
+
+    // Capture the user's existing position/normal nodes BEFORE we override. If they set
+    // `material.positionNode` to compute custom vertex deformation, our wrapper composes
+    // with it: read user's local-space position first, then transform by particle.
+    const userPositionNode: Node<"vec3"> | null = mat.positionNode ?? null;
+    const userNormalNode: Node<"vec3"> | null = mat.normalNode ?? null;
 
     // Derive a stable, pseudorandom axis per slot. Using slot index (not seed) keeps the axis
     // constant for a slot across ring-buffer reuses — visually indistinguishable from fully
@@ -114,10 +132,14 @@ export class MeshRenderer implements RenderModule {
       const scale = traits.x;
       const rotation = traits.y;
 
+      // Source position in object-local space — user's custom nodeMaterial.positionNode if
+      // set (e.g. vertex displacement), otherwise the geometry's `position` attribute.
+      const localSource: Node<"vec3"> = userPositionNode ?? positionLocal;
+
       const axis = axisNode();
       const cosA = cos(rotation);
       const sinA = sin(rotation);
-      const rotated = rotateByAxisAngle(positionLocal, axis, cosA, sinA);
+      const rotated = rotateByAxisAngle(localSource, axis, cosA, sinA);
 
       const effScale = scale.mul(alive);
       return particlePos.add(rotated.mul(effScale));
@@ -129,7 +151,9 @@ export class MeshRenderer implements RenderModule {
       const axis = axisNode();
       const cosA = cos(rotation);
       const sinA = sin(rotation);
-      return rotateByAxisAngle(normalLocal, axis, cosA, sinA);
+      // Source normal — user's custom normal if set, else geometry's `normal` attribute.
+      const localNormal: Node<"vec3"> = userNormalNode ?? normalLocal;
+      return rotateByAxisAngle(localNormal, axis, cosA, sinA);
     })();
 
     const mesh = new THREE.InstancedMesh(this._geometry, this._material, capacity);

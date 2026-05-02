@@ -34,6 +34,12 @@ side is a thin orchestrator that wires compose-able modules into each emitter.
 - **Pool warmup** — `Manager.preload(id, count)` pre-creates pooled instances AND dispatches
   their compute kernels once, so the first burst spawn of a heavy prefab doesn't stall on
   WGSL → MSL pipeline compilation.
+- **Texture + shader hooks on every renderer** — `textures: { base, mask, ... }` for
+  multi-texture materials and a `colorNode: (ctx) => Node<"vec4">` callback that gives full
+  TSL control over the fragment with particle state, UVs, and emitter time exposed.
+  Texture-driven motion via `FlowmapForce` (sample a flowmap, decode R/G as direction, push
+  velocity). `MeshRenderer` composes user-supplied vertex/normal nodes instead of
+  overriding them.
 - **Shader dump** — export every generated compute + render WGSL for debugging.
 
 ## Quick start

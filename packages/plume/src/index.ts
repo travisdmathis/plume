@@ -108,6 +108,8 @@ export { SphereCollision } from "./modules/update/sphere-collision.js";
 export type { SphereCollisionParams } from "./modules/update/sphere-collision.js";
 export { LimitVelocity } from "./modules/update/limit-velocity.js";
 export type { LimitVelocityParams } from "./modules/update/limit-velocity.js";
+export { FlowmapForce } from "./modules/update/flowmap-force.js";
+export type { FlowmapAxis, FlowmapForceParams } from "./modules/update/flowmap-force.js";
 export { DepthCollision } from "./modules/update/depth-collision.js";
 export type {
   DepthCollisionMode,
@@ -167,6 +169,10 @@ export type { ScalarLike, Vec3Like, ColorLike, CurveLike, GradientLike } from ".
 // Debug helpers (R12)
 export { dumpShaders } from "./debug.js";
 export type { EmitterShaderDump, ShaderDump, DumpOptions } from "./debug.js";
+
+// Renderer-shading hooks (R16)
+export { scrollUV, normalizeTextures } from "./modules/render-shading.js";
+export type { ColorNodeContext, ColorNodeFn, TextureInput } from "./modules/render-shading.js";
 
 // Textures
 export {

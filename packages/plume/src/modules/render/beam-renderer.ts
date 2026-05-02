@@ -13,12 +13,20 @@ import {
   normalize,
   uniform,
   varying,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
 
 import type { ParticleStorage } from "../../particle-buffer.js";
 import type { ModuleJSON, RenderContext, RenderModule } from "../module.js";
+import {
+  buildTextureNodes,
+  normalizeTextures,
+  type ColorNodeContext,
+  type ColorNodeFn,
+  type TextureInput,
+} from "../render-shading.js";
 import { registerModule } from "../registry.js";
 
 export type BeamBlendMode = "additive" | "alpha" | "normal";
@@ -37,6 +45,17 @@ export interface BeamRendererParams {
    * (spawn position). If false, uniform width. Default true.
    */
   taperToTail?: boolean;
+  /**
+   * Texture inputs. Pass a single `Texture` (key `"base"`) or a multi-texture map. UV
+   * semantics in the fragment: `uv.x` = 0..1 along the beam (0 = tail/spawn, 1 = head/
+   * current); `uv.y` = 0..1 across the beam width.
+   */
+  textures?: TextureInput;
+  /**
+   * Custom fragment shader. The renderer always multiplies the user's returned alpha by
+   * `taper * opacity` so the beam still cleanly fades from a custom shader.
+   */
+  colorNode?: ColorNodeFn;
   id?: string;
 }
 
@@ -49,7 +68,8 @@ export interface BeamRendererParams {
  * non-ballistic forces (turbulence, curl noise) the tail lags the actual path; for those,
  * use `RibbonRenderer` which traces the real path via a history buffer.
  *
- * This matches Unity's "Line" particle render mode — great for lasers, bullet trails, sparks.
+ * Texture-driven beams: supply `textures.base` (e.g. a horizontal lightning gradient) and
+ * scroll the UV in `colorNode` for animated energy effects.
  */
 export class BeamRenderer implements RenderModule {
   static readonly type = "render.beam";
@@ -64,9 +84,12 @@ export class BeamRenderer implements RenderModule {
   private _blending: BeamBlendMode;
   private _renderOrder: number;
   private _taper: boolean;
+  private _textures: Record<string, THREE.Texture>;
+  private _colorNode?: ColorNodeFn;
 
   private _uWidth = uniform(0.05, "float");
   private _uOpacity = uniform(1, "float");
+  private _uTime = uniform(0, "float");
 
   private _geometry?: THREE.BufferGeometry;
   private _material?: MeshBasicNodeMaterial;
@@ -78,6 +101,8 @@ export class BeamRenderer implements RenderModule {
     this._blending = params.blending ?? "additive";
     this._renderOrder = params.renderOrder ?? 0;
     this._taper = params.taperToTail ?? true;
+    this._textures = normalizeTextures(params.textures);
+    this._colorNode = params.colorNode;
     this.id = params.id;
 
     this._uWidth.value = this.width;
@@ -106,6 +131,7 @@ export class BeamRenderer implements RenderModule {
     this._mesh.count = liveCount;
     this._uWidth.value = this.width;
     this._uOpacity.value = this.opacity * ctx.intensity;
+    this._uTime.value = performance.now() / 1000;
     this.object3D.visible = liveCount > 0;
   }
 
@@ -157,7 +183,10 @@ export class BeamRenderer implements RenderModule {
   private _buildMaterial(storage: ParticleStorage): MeshBasicNodeMaterial {
     const uWidth = this._uWidth;
     const uOpacity = this._uOpacity;
+    const uTime = this._uTime;
     const taperEnabled = this._taper;
+    const textureNodes = buildTextureNodes(this._textures);
+    const userColorNode = this._colorNode;
 
     const mat = new MeshBasicNodeMaterial({
       transparent: true,
@@ -166,9 +195,16 @@ export class BeamRenderer implements RenderModule {
     });
     mat.toneMapped = false;
 
-    // Varying from vertex to fragment — taper factor (0 at tail → 1 at head) and instance color.
+    // Varyings handed to the fragment.
     const vTaper = varying(float(0), "vBeamTaper");
     const vColor = varying(vec4(1, 1, 1, 1), "vBeamColor");
+    const vUv = varying(vec2(0, 0), "vBeamUv");
+    const vLifetimeT = varying(float(0), "vBeamLifetimeT");
+    const vAge = varying(float(0), "vBeamAge");
+    const vLifetime = varying(float(0), "vBeamLifetime");
+    const vSize = varying(float(0), "vBeamSize");
+    const vAlive = varying(float(0), "vBeamAlive");
+    const vWorldPos = varying(vec3(0, 0, 0), "vBeamWorldPos");
 
     mat.vertexNode = Fn(() => {
       const i = instanceIndex.toInt();
@@ -185,7 +221,7 @@ export class BeamRenderer implements RenderModule {
       const alive = posAlive.w;
       const age = velAge.w;
       const initVel = initVelSize.xyz;
-      const rotation = traits.y;
+      const lifetime = traits.w.max(0.0001);
 
       // Spawn position = current - initialVelocity * age. Approximate for non-ballistic paths.
       const tail = head.sub(initVel.mul(age));
@@ -202,21 +238,53 @@ export class BeamRenderer implements RenderModule {
       const taperFactor: Node<"float"> = taperEnabled ? end : float(1);
       const halfWidth = uWidth.mul(taperFactor).mul(0.5).mul(alive);
 
-      // Optional roll around the beam axis — rotation trait reused as a twist angle.
-      // Simple two-axis offset: base perp + small roll using cross product recipe.
-      void rotation; // reserved for future twist support
-
       const finalPos = centerPos.add(perp.mul(side).mul(halfWidth));
+
       vTaper.assign(taperFactor);
       vColor.assign(storage.color.element(i));
+      // UV: x along beam (0 tail → 1 head), y across width (-1..+1 → 0..1).
+      vUv.assign(vec2(end, side.add(1).mul(0.5)));
+      vAge.assign(age);
+      vLifetime.assign(lifetime);
+      vLifetimeT.assign(age.div(lifetime).clamp(0, 1));
+      vSize.assign(traits.x);
+      vAlive.assign(alive);
+      vWorldPos.assign(centerPos);
 
       return cameraProjectionMatrix.mul(modelViewMatrix.mul(vec4(finalPos, 1.0)));
     })();
 
     mat.colorNode = Fn(() => {
-      const base = vColor;
-      const alpha = base.a.mul(vTaper).mul(uOpacity);
-      return vec4(base.rgb, alpha);
+      const ctx: ColorNodeContext = {
+        particle: {
+          color: vColor,
+          age: vAge,
+          lifetime: vLifetime,
+          lifetimeT: vLifetimeT,
+          size: vSize,
+          position: vWorldPos,
+          alive: vAlive,
+        },
+        uv: vUv,
+        textures: textureNodes,
+        time: uTime,
+      };
+
+      let userOut: Node<"vec4">;
+      if (userColorNode) {
+        userOut = userColorNode(ctx);
+      } else {
+        const base = textureNodes.base;
+        if (base) {
+          const sampled = base.sample(vUv);
+          userOut = vec4(sampled.rgb.mul(vColor.rgb), sampled.a.mul(vColor.a));
+        } else {
+          userOut = vColor;
+        }
+      }
+      // Fade-mask is applied to the user's RGBA's alpha channel — RGB is left alone so
+      // artist-controlled colors stay saturated through the beam.
+      return vec4(userOut.rgb, userOut.a.mul(vTaper).mul(uOpacity));
     })();
 
     return mat;

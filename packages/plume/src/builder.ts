@@ -68,6 +68,7 @@ import { ColorOverLife } from "./modules/update/color-over-life.js";
 import { CurlNoiseForce, type CurlNoiseForceParams } from "./modules/update/curl-noise-force.js";
 import { DepthCollision, type DepthCollisionParams } from "./modules/update/depth-collision.js";
 import { SdfCollision, type SdfCollisionParams } from "./modules/update/sdf-collision.js";
+import { FlowmapForce, type FlowmapForceParams } from "./modules/update/flowmap-force.js";
 import { Drag } from "./modules/update/drag.js";
 import { Gravity } from "./modules/update/gravity.js";
 import { LifetimeTick } from "./modules/update/lifetime-tick.js";
@@ -332,6 +333,10 @@ export class EmitterBuilder {
   }
   sdfCollision(params: SdfCollisionParams): this {
     this._update.push(new SdfCollision(params));
+    return this;
+  }
+  flowmapForce(params: FlowmapForceParams): this {
+    this._update.push(new FlowmapForce(params));
     return this;
   }
   limitVelocity(params: LimitVelocityParams | number): this {

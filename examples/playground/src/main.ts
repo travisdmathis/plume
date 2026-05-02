@@ -9,14 +9,17 @@ import {
   Manager,
   dumpShaders,
   emitter,
+  scrollUV,
   sdfBox,
   sdfSphere,
   sdfUnion,
+  softCircleTexture,
   system,
   systemDefFromJSON,
   systemDefToJSON,
   type SystemDef,
 } from "plume";
+import { vec2, vec4 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -918,6 +921,237 @@ function seededTwinDef(): SystemDef {
     .build();
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// R16 demos — texture & shader hooks. Each preset uses a procedurally generated
+// texture (no external assets) so the playground stays self-contained.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Generate an RGBA `DataTexture` from a per-pixel callback. */
+function makeDataTexture(
+  width: number,
+  height: number,
+  fill: (x: number, y: number, u: number, v: number) => [number, number, number, number],
+): THREE.DataTexture {
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const u = (x + 0.5) / width;
+      const v = (y + 0.5) / height;
+      const [r, g, b, a] = fill(x, y, u, v);
+      const i = (y * width + x) * 4;
+      data[i + 0] = Math.round(r * 255);
+      data[i + 1] = Math.round(g * 255);
+      data[i + 2] = Math.round(b * 255);
+      data[i + 3] = Math.round(a * 255);
+    }
+  }
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.UnsignedByteType);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Repeating horizontal stripes of varying intensity, like an electric arc cross-section. */
+const _energyBandsTex = makeDataTexture(8, 64, (_x, _y, u, _v) => {
+  const bandPhase = u * 6;
+  const intensity = 0.4 + 0.6 * Math.abs(Math.sin(bandPhase * Math.PI));
+  return [intensity, intensity * 1.1, 1, intensity];
+});
+
+/** Smooth value-noise mask used as the `dissolve` threshold in the dissolve sprite. */
+const _dissolveNoiseTex = (() => {
+  const grid = 8;
+  const cells: number[][] = [];
+  for (let y = 0; y <= grid; y++) {
+    const row: number[] = [];
+    for (let x = 0; x <= grid; x++) row.push(Math.random());
+    cells.push(row);
+  }
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const smooth = (t: number) => t * t * (3 - 2 * t);
+  return makeDataTexture(64, 64, (_x, _y, u, v) => {
+    const gx = u * grid;
+    const gy = v * grid;
+    const ix = Math.floor(gx);
+    const iy = Math.floor(gy);
+    const fx = smooth(gx - ix);
+    const fy = smooth(gy - iy);
+    const c00 = cells[iy]![ix]!;
+    const c10 = cells[iy]![ix + 1]!;
+    const c01 = cells[iy + 1]![ix]!;
+    const c11 = cells[iy + 1]![ix + 1]!;
+    const top = lerp(c00, c10, fx);
+    const bot = lerp(c01, c11, fx);
+    const n = lerp(top, bot, fy);
+    return [n, n, n, 1];
+  });
+})();
+
+/**
+ * Swirl flowmap — a 2D vector field that rotates around the origin clockwise. R/G channels
+ * encode the direction in the standard centered-at-0.5 form.
+ */
+const _swirlFlowmapTex = makeDataTexture(128, 128, (_x, _y, u, v) => {
+  // World-space coords: u, v are in [0,1]; remap to centered [-1, +1].
+  const cx = u * 2 - 1;
+  const cy = v * 2 - 1;
+  // Tangent of a circle around origin → (-y, x), normalized.
+  const len = Math.sqrt(cx * cx + cy * cy) || 1;
+  const tx = -cy / len;
+  const ty = cx / len;
+  // Encode [-1, +1] → [0, 1].
+  const r = tx * 0.5 + 0.5;
+  const g = ty * 0.5 + 0.5;
+  return [r, g, 0.5, 1];
+});
+
+/**
+ * R16 #1 — scrolling-texture energy beam. The base texture is a banded gradient; the
+ * `colorNode` scrolls UV.x with `time` so the bands appear to flow along the bolt.
+ */
+function scrollingBeamDef(): SystemDef {
+  return system("scrolling_beam")
+    .duration(1.5)
+    .emitter("bolts", (e) =>
+      e
+        .capacity(32)
+        .duration(0.05)
+        .spawnBurst({ time: 0, count: 16 })
+        .lifetime({ min: 0.7, max: 1.3 })
+        .position({ shape: { kind: "sphere", radius: 0.15 } })
+        .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 5, max: 9 } })
+        .size(1)
+        .color([3.5, 2.0, 5.5], { alpha: 1 })
+        .rotation(0)
+        .integrate()
+        .drag(0.5)
+        .alphaOverLife([
+          [0, 1],
+          [0.7, 0.9],
+          [1, 0],
+        ])
+        .renderBeam({
+          width: 0.18,
+          blending: "additive",
+          taperToTail: true,
+          renderOrder: 12,
+          textures: { base: _energyBandsTex },
+          colorNode: ({ textures, uv, particle, time }) => {
+            // Scroll the band texture along the beam's length (uv.x = 0..1 tail→head).
+            const scrolled = scrollUV(uv, vec2(-2.5, 0), time);
+            const sample = textures.base.sample(scrolled);
+            // Multiply by particle color (HDR magenta) and pump the alpha for additive glow.
+            return vec4(sample.rgb.mul(particle.color.rgb), sample.a.mul(particle.color.a));
+          },
+        }),
+    )
+    .build();
+}
+
+/**
+ * R16 #2 — dissolving sprite. Uses two textures: a soft circle (default base) and a noise
+ * mask. The custom `colorNode` discards pixels where the noise sample is below the
+ * particle's lifetime fraction → the sprite looks like it's burning away from inside out.
+ */
+function dissolveSpriteDef(): SystemDef {
+  return system("dissolve_sprite")
+    .duration(3)
+    .emitter("flecks", (e) =>
+      e
+        .capacity(256)
+        .duration(2.5)
+        .spawnRate(80)
+        .lifetime({ min: 1.4, max: 2.4 })
+        // Wider spawn area to reduce additive stacking density on the first burst.
+        .position({ shape: { kind: "sphere", radius: 0.6 } })
+        .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.4, max: 1.2 } })
+        .size({ min: 0.4, max: 0.7 })
+        // All channels stay below the bloom threshold (0.85). The rim glow inside `colorNode`
+        // briefly pushes the edge above it for a subtle local hot-pixel pop, but the body
+        // never blooms. This kills the "wall of light on spawn" problem when a burst lands
+        // on top of itself in additive blend.
+        .color({ min: [0.55, 0.28, 0.12], max: [0.75, 0.38, 0.18] }, { alpha: 1 })
+        .rotation({ min: 0, max: Math.PI * 2 })
+        .integrate()
+        .gravity([0, 0.4, 0])
+        .drag(0.2)
+        // Slower ramp-up — particles ease in over the first 25% of life. Combined with the
+        // tame colors, no single moment overpowers.
+        .alphaOverLife([
+          [0, 0],
+          [0.25, 1],
+          [1, 1],
+        ])
+        .renderSprite({
+          blending: "additive",
+          // Two textures: the soft-circle gives the base SHAPE of each ember (no harsh
+          // square edges), the noise mask drives the per-pixel dissolve threshold.
+          textures: { base: softCircleTexture(64), mask: _dissolveNoiseTex },
+          colorNode: ({ textures, uv, particle }) => {
+            const shape = textures.base.sample(uv).a; // soft circle alpha falloff
+            const noise = textures.mask.sample(uv).r;
+            // Each pixel disappears when `lifetimeT` exceeds its noise value — older
+            // particles burn away more pixels each frame, so the sprite dissolves from
+            // random spots inward.
+            const visible = noise.greaterThan(particle.lifetimeT).select(1, 0);
+            // Subtle rim-glow at the dissolve edge — the classic "burning paper" highlight.
+            const edge = noise.sub(particle.lifetimeT).abs();
+            const rim = edge.lessThan(0.04).select(1.6, 1);
+            return vec4(
+              particle.color.rgb.mul(rim),
+              // Final alpha: base shape × dissolve mask × particle fade-in.
+              shape.mul(visible).mul(particle.color.a),
+            );
+          },
+        }),
+    )
+    .build();
+}
+
+/**
+ * R16 #3 — flowmap-driven motion. A swirl flowmap nudges every particle's velocity each
+ * tick toward the rotational tangent at its (x, z) position, so the cloud rotates as a whole
+ * around the y-axis without any explicit force or attractor.
+ */
+function flowmapParticlesDef(): SystemDef {
+  return system("flowmap_particles")
+    .duration(8)
+    .emitter("dust", (e) =>
+      e
+        .capacity(512)
+        .duration(7.5)
+        .spawnRate(150)
+        .lifetime({ min: 2.5, max: 4.0 })
+        .position({ shape: { kind: "disc", radius: 2.5, thickness: 1 } })
+        .velocity({ shape: { kind: "point" }, speed: 0 })
+        .size({ min: 0.08, max: 0.16 })
+        .color({ min: [0.4, 1.5, 2.5], max: [0.7, 2.0, 3.0] }, { alpha: 1 })
+        .rotation({ min: 0, max: Math.PI * 2 })
+        .integrate()
+        // Flowmap covers a 6×6 world rectangle centered at origin in the XZ plane.
+        .flowmapForce({
+          texture: _swirlFlowmapTex,
+          origin: [-3, 0, -3],
+          size: [6, 6],
+          axis: "xz",
+          amplitude: 4,
+        })
+        .drag(1.5)
+        .alphaOverLife([
+          [0, 0],
+          [0.2, 1],
+          [0.8, 1],
+          [1, 0],
+        ])
+        .renderSprite({ blending: "additive", renderOrder: 6 }),
+    )
+    .build();
+}
+
 manager.register("explosion", explosionDef);
 manager.register("smoke_puff", smokePuffDef);
 manager.register("magic_orb", magicOrbDef);
@@ -930,6 +1164,9 @@ manager.register("ember_swarm", emberSwarmDef);
 manager.register("seeded_twin", seededTwinDef);
 manager.register("portal", portalDef);
 manager.register("sdf_bouncer", sdfBouncerDef);
+manager.register("scrolling_beam", scrollingBeamDef);
+manager.register("dissolve_sprite", dissolveSpriteDef);
+manager.register("flowmap_particles", flowmapParticlesDef);
 
 // Sanity: confirm JSON round-trip produces an equivalent def.
 {
@@ -1042,6 +1279,16 @@ document.getElementById("btn-rain")!.addEventListener("click", () => {
 
 document.getElementById("btn-sdf-bouncer")!.addEventListener("click", () => {
   manager.spawn("sdf_bouncer", { position: new THREE.Vector3(0, 6, 0) });
+});
+
+document.getElementById("btn-scrolling-beam")!.addEventListener("click", () => {
+  manager.spawn("scrolling_beam", { position: new THREE.Vector3(0, 1.5, 0) });
+});
+document.getElementById("btn-dissolve-sprite")!.addEventListener("click", () => {
+  manager.spawn("dissolve_sprite", { position: new THREE.Vector3(0, 1.5, 0) });
+});
+document.getElementById("btn-flowmap")!.addEventListener("click", () => {
+  manager.spawn("flowmap_particles", { position: new THREE.Vector3(0, 0.5, 0) });
 });
 
 // R10 LOD demo — spawn a 7×7 grid of the sparkle fountain preset across a wide area. Each

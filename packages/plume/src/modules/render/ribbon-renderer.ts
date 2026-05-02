@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import type ComputeNode from "three/src/nodes/gpgpu/ComputeNode.js";
+import type Node from "three/src/nodes/core/Node.js";
 import type StorageBufferNode from "three/src/nodes/accessors/StorageBufferNode.js";
 import type UniformNode from "three/src/nodes/core/UniformNode.js";
 import type { WebGPURenderer } from "three/webgpu";
@@ -17,6 +18,7 @@ import {
   normalize,
   uniform,
   varying,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -24,6 +26,13 @@ import {
 import type { ParticleStorage } from "../../particle-buffer.js";
 import { attr } from "../../particle-buffer.js";
 import type { ModuleJSON, RenderContext, RenderModule } from "../module.js";
+import {
+  buildTextureNodes,
+  normalizeTextures,
+  type ColorNodeContext,
+  type ColorNodeFn,
+  type TextureInput,
+} from "../render-shading.js";
 import { registerModule } from "../registry.js";
 
 export type RibbonBlendMode = "additive" | "alpha" | "normal";
@@ -39,6 +48,23 @@ export interface RibbonRendererParams {
   opacity?: number;
   /** Explicit three.js renderOrder for sorting. */
   renderOrder?: number;
+  /**
+   * Texture inputs. Pass a single `Texture` (gets the key `"base"`) or a multi-texture map
+   * for layered shading. The first one supplied becomes the default-shader base sample.
+   *
+   * UV semantics in the fragment: `uv.x` runs 0..1 along the ribbon length (0 = newest /
+   * head, 1 = oldest / tail), `uv.y` runs 0..1 across the strip width (0 = -side, 1 = +side).
+   * Combine with `time` in `colorNode` to scroll texture along the trail (lightning bolts,
+   * energy beams, glowing magic).
+   */
+  textures?: TextureInput;
+  /**
+   * Custom fragment shader — replaces the default `vColor.rgb, vColor.a * taper * opacity`
+   * computation. See {@link ColorNodeContext}; for ribbons, `uv.x` is along-length and
+   * `uv.y` is across-width. The default `taper`/`stale` masking is still applied to the
+   * returned alpha automatically so trails fade out cleanly even with custom shading.
+   */
+  colorNode?: ColorNodeFn;
   id?: string;
 }
 
@@ -60,6 +86,9 @@ export interface RibbonRendererParams {
  *  - Newly-spawned particles initially see stale history from the previous occupant of their
  *    ring-buffer slot. The shader checks `currentAge - historyAge` — if the delta is out of
  *    range (stale or "future"), the vertex collapses to the current position so no tail is drawn.
+ *
+ * For texture-driven trails (energy beams, magic streamers), supply `textures` and optionally
+ * a `colorNode`. The default shader samples `textures.base` at `uv` if any texture is supplied.
  */
 export class RibbonRenderer implements RenderModule {
   static readonly type = "render.ribbon";
@@ -74,6 +103,8 @@ export class RibbonRenderer implements RenderModule {
 
   private _blending: RibbonBlendMode;
   private _renderOrder: number;
+  private _textures: Record<string, THREE.Texture>;
+  private _colorNode?: ColorNodeFn;
 
   private _capacity = 0;
   private _history?: StorageBufferNode<"vec4">;
@@ -82,6 +113,7 @@ export class RibbonRenderer implements RenderModule {
   private _uHead: UniformNode<"float", number>;
   private _uWidth: UniformNode<"float", number>;
   private _uOpacity: UniformNode<"float", number>;
+  private _uTime: UniformNode<"float", number>;
 
   private _head = 0;
   private _geometry?: THREE.BufferGeometry;
@@ -94,11 +126,14 @@ export class RibbonRenderer implements RenderModule {
     this._blending = params.blending ?? "additive";
     this.opacity = params.opacity ?? 1;
     this._renderOrder = params.renderOrder ?? 0;
+    this._textures = normalizeTextures(params.textures);
+    this._colorNode = params.colorNode;
     this.id = params.id;
 
     this._uHead = uniform(0) as UniformNode<"float", number>;
     this._uWidth = uniform(this.width) as UniformNode<"float", number>;
     this._uOpacity = uniform(this.opacity) as UniformNode<"float", number>;
+    this._uTime = uniform(0) as UniformNode<"float", number>;
 
     this.object3D = new THREE.Group();
     this.object3D.frustumCulled = false;
@@ -137,6 +172,7 @@ export class RibbonRenderer implements RenderModule {
     this._mesh.count = liveCount;
     this._uOpacity.value = this.opacity * ctx.intensity;
     this._uWidth.value = this.width;
+    this._uTime.value = performance.now() / 1000;
     this.object3D.visible = liveCount > 0;
   }
 
@@ -154,6 +190,7 @@ export class RibbonRenderer implements RenderModule {
       blending: this._blending,
       opacity: this.opacity,
       renderOrder: this._renderOrder,
+      // textures + colorNode aren't serializable — caller must re-supply on fromJSON.
     };
   }
 
@@ -224,6 +261,10 @@ export class RibbonRenderer implements RenderModule {
     const uHead = this._uHead;
     const uWidth = this._uWidth;
     const uOpacity = this._uOpacity;
+    const uTime = this._uTime;
+    const textureNodes = buildTextureNodes(this._textures);
+    const userColorNode = this._colorNode;
+
     const mat = new MeshBasicNodeMaterial({
       transparent: true,
       depthWrite: false,
@@ -231,9 +272,22 @@ export class RibbonRenderer implements RenderModule {
     });
     mat.toneMapped = false;
 
+    // Varyings: per-vertex values interpolated to the fragment.
+    //   vTaper:    1 at the head taper-down to 0 at the tail (already alpha-multiplied).
+    //   vStale:    1 if this vertex sits on a stale (pre-spawn) history slot, else 0.
+    //   vColor:    full RGBA from particle.color attribute (post-ColorOverLife).
+    //   vUv:       (length-along-ribbon ∈ [0,1], side-across-width ∈ [0,1]).
+    //   vLifetimeT: particle's age/lifetime ∈ [0,1] — same across all ribbon verts of one strip.
     const vTaper = varying(float(0), "vRibbonTaper");
-    const vColor = varying(vec4(1, 1, 1, 1), "vRibbonColor");
     const vStale = varying(float(0), "vRibbonStale");
+    const vColor = varying(vec4(1, 1, 1, 1), "vRibbonColor");
+    const vUv = varying(vec2(0, 0), "vRibbonUv");
+    const vLifetimeT = varying(float(0), "vRibbonLifetimeT");
+    const vWorldPos = varying(vec3(0, 0, 0), "vRibbonWorldPos");
+    const vSize = varying(float(0), "vRibbonSize");
+    const vAlive = varying(float(0), "vRibbonAlive");
+    const vAge = varying(float(0), "vRibbonAge");
+    const vLifetime = varying(float(0), "vRibbonLifetime");
 
     mat.vertexNode = Fn(() => {
       const pIdx = instanceIndex;
@@ -266,7 +320,9 @@ export class RibbonRenderer implements RenderModule {
       const pI = pIdx.toInt();
       const currentPos = attr.position.read(storage, pI);
       const currentAge = attr.age.read(storage, pI);
+      const lifetime = attr.lifetime.read(storage, pI);
       const alive = attr.alive.read(storage, pI);
+      const sizeAttr = attr.size.read(storage, pI);
 
       // Validity check — allow slots whose captured age is within (0, currentAge).
       // Slots from BEFORE this particle spawned have stale ages from previous occupants.
@@ -287,11 +343,19 @@ export class RibbonRenderer implements RenderModule {
       vStale.assign(float(1).sub(validF));
 
       vColor.assign(attr.color.read(storage, pI));
+      // UV.x: 0 = head/newest, 1 = tail/oldest. UV.y: side mapped from [-1, +1] → [0, 1].
+      vUv.assign(vec2(kLocal.div(float(N - 1)), side.add(1).mul(0.5)));
+      vLifetimeT.assign(currentAge.div(lifetime.max(0.0001)).clamp(0, 1));
+      vAge.assign(currentAge);
+      vLifetime.assign(lifetime);
+      vSize.assign(sizeAttr);
+      vAlive.assign(alive);
 
       // Collapse stale slots to the particle's current position — makes stale triangles
       // zero-area degenerate so no fragments rasterize, eliminating the fade-in-from-stale
       // visual where interpolation of a stale-flag varying showed previous-particle trails.
       const effectivePos = hPos.mul(validF).add(currentPos.mul(float(1).sub(validF)));
+      vWorldPos.assign(effectivePos);
 
       // Tangent along the trail.
       const dir = nextPos.sub(hPos);
@@ -306,11 +370,45 @@ export class RibbonRenderer implements RenderModule {
     })();
 
     mat.colorNode = Fn(() => {
-      // Fragment alpha = baseColor.a * taper * opacity. Stale vertices contribute nothing.
-      const base = vColor;
       const validMask = float(1).sub(vStale);
-      const alpha = base.a.mul(vTaper).mul(uOpacity).mul(validMask);
-      return vec4(base.rgb, alpha);
+      // Alpha mask that's always applied — taper × validMask × global opacity. The taper
+      // already includes the alive flag and stale-slot rejection; multiplying it onto the
+      // user's returned alpha guarantees ribbons fade out at the tail and don't render
+      // stale segments, regardless of what the user shader does.
+      const tailMask = vTaper.mul(validMask).mul(uOpacity);
+
+      const ctx: ColorNodeContext = {
+        particle: {
+          color: vColor,
+          age: vAge,
+          lifetime: vLifetime,
+          lifetimeT: vLifetimeT,
+          size: vSize,
+          position: vWorldPos,
+          alive: vAlive,
+        },
+        uv: vUv,
+        textures: textureNodes,
+        time: uTime,
+      };
+
+      let userOut: Node<"vec4">;
+      if (userColorNode) {
+        userOut = userColorNode(ctx);
+      } else {
+        // Default: if a base texture is supplied, modulate by it; else just use vColor.
+        const base = textureNodes.base;
+        if (base) {
+          const sampled = base.sample(vUv);
+          userOut = vec4(sampled.rgb.mul(vColor.rgb), sampled.a.mul(vColor.a));
+        } else {
+          userOut = vColor;
+        }
+      }
+
+      // Apply taper + stale + opacity onto whatever the user returned. We multiply only on
+      // alpha so RGB stays artist-controlled.
+      return vec4(userOut.rgb, userOut.a.mul(tailMask));
     })();
 
     return mat;
