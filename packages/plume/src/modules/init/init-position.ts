@@ -28,9 +28,7 @@ export class InitPosition implements ParticleSpawnModule {
 
   contributeSpawnTSL(ctx: SpawnInitContext): void {
     const localPos = samplePositionTSL(this.shape, ctx.seed, 20);
-    const worldPos = this.worldSpace
-      ? ctx.worldMatrix.mul(vec4(localPos, 1.0)).xyz
-      : localPos;
+    const worldPos = this.worldSpace ? ctx.worldMatrix.mul(vec4(localPos, 1.0)).xyz : localPos;
     attr.position.write(ctx.storage, ctx.slot, worldPos);
   }
 

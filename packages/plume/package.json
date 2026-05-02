@@ -1,7 +1,7 @@
 {
   "name": "plume",
   "version": "0.1.0",
-  "description": "Niagara-equivalent VFX system for three.js",
+  "description": "GPU-first, Niagara-style VFX system for three.js. Particle simulation in compute shaders via TSL.",
   "keywords": [
     "three",
     "threejs",
@@ -10,8 +10,19 @@
     "niagara",
     "gpu",
     "webgpu",
-    "tsl"
+    "tsl",
+    "compute",
+    "shader"
   ],
+  "homepage": "https://github.com/travisdmathis/plume#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/travisdmathis/plume.git",
+    "directory": "packages/plume"
+  },
+  "bugs": {
+    "url": "https://github.com/travisdmathis/plume/issues"
+  },
   "license": "MIT",
   "author": "Travis Mathis",
   "type": "module",

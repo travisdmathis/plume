@@ -20,7 +20,6 @@ import {
 } from "three/tsl";
 
 import type { ParticleStorage } from "../../particle-buffer.js";
-import { attr } from "../../particle-buffer.js";
 import type { ModuleJSON, RenderContext, RenderInitOptions, RenderModule } from "../module.js";
 import { softCircleTexture } from "../../textures/procedural.js";
 import { registerModule } from "../registry.js";
@@ -176,9 +175,16 @@ export class SpriteRenderer implements RenderModule {
         const frame =
           animation.mode === "loop"
             ? age.mul(animation.fps ?? 24)
-            : age.div(lifetime).mul(frameCount).min(float(frameCount - 1));
+            : age
+                .div(lifetime)
+                .mul(frameCount)
+                .min(float(frameCount - 1));
         // spritesheetUV is typed as plain Node; at runtime it returns a vec2. Narrowing cast.
-        sampleUv = spritesheetUV(vec2(animation.cols, animation.rows), uv(), frame) as unknown as Node<"vec2">;
+        sampleUv = spritesheetUV(
+          vec2(animation.cols, animation.rows),
+          uv(),
+          frame,
+        ) as unknown as Node<"vec2">;
       }
       const sampled = texNode.sample(sampleUv);
       const rgb = sampled.rgb.mul(col.rgb);

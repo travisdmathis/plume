@@ -1,6 +1,8 @@
 import type * as THREE from "three";
+import type StorageBufferNode from "three/src/nodes/accessors/StorageBufferNode.js";
 import type Node from "three/src/nodes/core/Node.js";
 import type UniformNode from "three/src/nodes/core/UniformNode.js";
+import type { WebGPURenderer } from "three/webgpu";
 import type { ParticleStorage } from "../particle-buffer.js";
 import type { RNG } from "../math/rng.js";
 
@@ -96,7 +98,7 @@ export interface RenderInitOptions {
    * (SpriteRenderer) map `instanceIndex → sortIndices[instanceIndex]` to read particles in
    * depth-correct draw order.
    */
-  sortIndices?: import("three/src/nodes/accessors/StorageBufferNode.js").default<"uint">;
+  sortIndices?: StorageBufferNode<"uint">;
 }
 
 /** Owns a Three.js Object3D that renders particles by reading the ParticleStorage. */
@@ -110,15 +112,11 @@ export interface RenderModule extends ModuleBase {
    * Used by renderers that need per-frame compute work — e.g., `RibbonRenderer` captures each
    * alive particle's current position into a per-slot history buffer.
    */
-  postUpdate?(renderer: import("three/webgpu").WebGPURenderer, liveCount: number): void;
+  postUpdate?(renderer: WebGPURenderer, liveCount: number): void;
   dispose(): void;
 }
 
-export type Module =
-  | EmitterSpawnModule
-  | ParticleSpawnModule
-  | ParticleUpdateModule
-  | RenderModule;
+export type Module = EmitterSpawnModule | ParticleSpawnModule | ParticleUpdateModule | RenderModule;
 
 export interface ModuleFactory {
   readonly type: string;

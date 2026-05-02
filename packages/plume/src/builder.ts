@@ -37,14 +37,7 @@
 import { Curve1D, type CurveKeyframe } from "./math/curve.js";
 import { Gradient, type GradientStop } from "./math/gradient.js";
 import type { EmissionShape } from "./math/shapes.js";
-import type {
-  ColorInput,
-  ColorRGBATuple,
-  ColorTuple,
-  ScalarInput,
-  Vec3Input,
-  Vec3Tuple,
-} from "./types.js";
+import type { ColorInput, ColorTuple, ScalarInput, Vec3Input, Vec3Tuple } from "./types.js";
 import type { EmitterDef, EmitterEventConfig } from "./emitter.js";
 import type { SystemDef } from "./system.js";
 import type {
@@ -73,10 +66,7 @@ import { InitVelocity } from "./modules/init/init-velocity.js";
 import { AlphaOverLife } from "./modules/update/alpha-over-life.js";
 import { ColorOverLife } from "./modules/update/color-over-life.js";
 import { CurlNoiseForce, type CurlNoiseForceParams } from "./modules/update/curl-noise-force.js";
-import {
-  DepthCollision,
-  type DepthCollisionParams,
-} from "./modules/update/depth-collision.js";
+import { DepthCollision, type DepthCollisionParams } from "./modules/update/depth-collision.js";
 import { SdfCollision, type SdfCollisionParams } from "./modules/update/sdf-collision.js";
 import { Drag } from "./modules/update/drag.js";
 import { Gravity } from "./modules/update/gravity.js";
@@ -236,11 +226,7 @@ export class EmitterBuilder {
     this._init.push(new InitPosition(params));
     return this;
   }
-  velocity(params: {
-    shape: EmissionShape;
-    speed: ScalarLike;
-    worldSpace?: boolean;
-  }): this {
+  velocity(params: { shape: EmissionShape; speed: ScalarLike; worldSpace?: boolean }): this {
     this._init.push(
       new InitVelocity({
         shape: params.shape,
@@ -288,8 +274,7 @@ export class EmitterBuilder {
     return this;
   }
   gravity(acceleration: Vec3Tuple | number = -9.81): this {
-    const v: Vec3Tuple =
-      typeof acceleration === "number" ? [0, acceleration, 0] : acceleration;
+    const v: Vec3Tuple = typeof acceleration === "number" ? [0, acceleration, 0] : acceleration;
     this._update.push(new Gravity({ acceleration: v }));
     return this;
   }

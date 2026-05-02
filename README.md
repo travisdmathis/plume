@@ -81,8 +81,16 @@ manager.register("smoke", () =>
         .integrate()
         .drag(0.4)
         .gravity([0, 0.5, 0])
-        .sizeOverLife([[0, 0.8], [0.5, 1.4], [1, 2.0]])
-        .alphaOverLife([[0, 0.4], [0.3, 1], [1, 0]])
+        .sizeOverLife([
+          [0, 0.8],
+          [0.5, 1.4],
+          [1, 2.0],
+        ])
+        .alphaOverLife([
+          [0, 0.4],
+          [0.3, 1],
+          [1, 0],
+        ])
         .renderSprite({ blending: "alpha" }),
     )
     .build(),
@@ -127,9 +135,9 @@ with sub-emitters, seeded determinism twin, shader dump).
 
 ## Packages
 
-| Package                    | Description                                         |
-| -------------------------- | --------------------------------------------------- |
-| [`plume`](./packages/plume) | Engine: modules, renderers, manager, TSL codegen    |
+| Package                     | Description                                      |
+| --------------------------- | ------------------------------------------------ |
+| [`plume`](./packages/plume) | Engine: modules, renderers, manager, TSL codegen |
 
 Planned:
 

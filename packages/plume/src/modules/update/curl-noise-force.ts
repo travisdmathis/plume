@@ -72,22 +72,30 @@ export class CurlNoiseForce implements ParticleUpdateModule {
     const invH2 = 1.0 / (2.0 * H);
 
     // ∂ψz/∂y and ∂ψy/∂z
-    const dPz_dy = mx_noise_vec3(pz.add(hy)).sub(mx_noise_vec3(pz.sub(hy))).mul(invH2);
-    const dPy_dz = mx_noise_vec3(py.add(hz)).sub(mx_noise_vec3(py.sub(hz))).mul(invH2);
+    const dPz_dy = mx_noise_vec3(pz.add(hy))
+      .sub(mx_noise_vec3(pz.sub(hy)))
+      .mul(invH2);
+    const dPy_dz = mx_noise_vec3(py.add(hz))
+      .sub(mx_noise_vec3(py.sub(hz)))
+      .mul(invH2);
     // ∂ψx/∂z and ∂ψz/∂x
-    const dPx_dz = mx_noise_vec3(px.add(hz)).sub(mx_noise_vec3(px.sub(hz))).mul(invH2);
-    const dPz_dx = mx_noise_vec3(pz.add(hx)).sub(mx_noise_vec3(pz.sub(hx))).mul(invH2);
+    const dPx_dz = mx_noise_vec3(px.add(hz))
+      .sub(mx_noise_vec3(px.sub(hz)))
+      .mul(invH2);
+    const dPz_dx = mx_noise_vec3(pz.add(hx))
+      .sub(mx_noise_vec3(pz.sub(hx)))
+      .mul(invH2);
     // ∂ψy/∂x and ∂ψx/∂y
-    const dPy_dx = mx_noise_vec3(py.add(hx)).sub(mx_noise_vec3(py.sub(hx))).mul(invH2);
-    const dPx_dy = mx_noise_vec3(px.add(hy)).sub(mx_noise_vec3(px.sub(hy))).mul(invH2);
+    const dPy_dx = mx_noise_vec3(py.add(hx))
+      .sub(mx_noise_vec3(py.sub(hx)))
+      .mul(invH2);
+    const dPx_dy = mx_noise_vec3(px.add(hy))
+      .sub(mx_noise_vec3(px.sub(hy)))
+      .mul(invH2);
 
     // curl = (∂ψz.y/∂y - ∂ψy.z/∂z, ∂ψx.z/∂z - ∂ψz.x/∂x, ∂ψy.x/∂x - ∂ψx.y/∂y)
     // Using x/y/z components of each partial so the result is a single vec3.
-    const curl = vec3(
-      dPz_dy.y.sub(dPy_dz.z),
-      dPx_dz.z.sub(dPz_dx.x),
-      dPy_dx.x.sub(dPx_dy.y),
-    );
+    const curl = vec3(dPz_dy.y.sub(dPy_dz.z), dPx_dz.z.sub(dPz_dx.x), dPy_dx.x.sub(dPx_dy.y));
 
     const force = curl.mul(this._uAmp);
     const vel = attr.velocity.read(ctx.storage, ctx.i);

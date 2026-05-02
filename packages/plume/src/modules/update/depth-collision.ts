@@ -102,8 +102,14 @@ export class DepthCollision implements ParticleUpdateModule {
 
     this._uViewProj = uniform(new THREE.Matrix4()) as UniformNode<"mat4", THREE.Matrix4>;
     this._uInvViewProj = uniform(new THREE.Matrix4()) as UniformNode<"mat4", THREE.Matrix4>;
-    this._uCameraForward = uniform(new THREE.Vector3(0, 0, -1)) as UniformNode<"vec3", THREE.Vector3>;
-    this._uTexelSize = uniform(new THREE.Vector2(1 / 1920, 1 / 1080)) as UniformNode<"vec2", THREE.Vector2>;
+    this._uCameraForward = uniform(new THREE.Vector3(0, 0, -1)) as UniformNode<
+      "vec3",
+      THREE.Vector3
+    >;
+    this._uTexelSize = uniform(new THREE.Vector2(1 / 1920, 1 / 1080)) as UniformNode<
+      "vec2",
+      THREE.Vector2
+    >;
     this._uRestitution = uniform(this.restitution) as UniformNode<"float", number>;
     this._uFriction = uniform(this.friction) as UniformNode<"float", number>;
     this._uThickness = uniform(this.thickness) as UniformNode<"float", number>;

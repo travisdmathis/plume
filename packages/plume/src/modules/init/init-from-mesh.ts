@@ -78,9 +78,10 @@ export class InitFromMesh implements ParticleSpawnModule {
     this.worldSpace = params.worldSpace ?? true;
     this.fill = params.fill ?? "surface";
     this.id = params.id;
-    this._uMeshMatrix = uniform(
-      params.matrix?.clone() ?? new THREE.Matrix4(),
-    ) as UniformNode<"mat4", THREE.Matrix4>;
+    this._uMeshMatrix = uniform(params.matrix?.clone() ?? new THREE.Matrix4()) as UniformNode<
+      "mat4",
+      THREE.Matrix4
+    >;
 
     if (this.fill === "surface") {
       const { verts, cdf } = buildTriangleCdf(params.geometry);
@@ -100,7 +101,9 @@ export class InitFromMesh implements ParticleSpawnModule {
 
     // Transform through mesh's local→world, and optionally through emitter's world matrix.
     const meshWorldPos = this._uMeshMatrix.mul(vec4(localPos, 1.0)).xyz;
-    const finalPos = this.worldSpace ? ctx.worldMatrix.mul(vec4(meshWorldPos, 1.0)).xyz : meshWorldPos;
+    const finalPos = this.worldSpace
+      ? ctx.worldMatrix.mul(vec4(meshWorldPos, 1.0)).xyz
+      : meshWorldPos;
     attr.position.write(ctx.storage, ctx.slot, finalPos);
   }
 
@@ -132,8 +135,16 @@ export class InitFromMesh implements ParticleSpawnModule {
     // Load the chosen triangle's three vertices. Each vertex is 3 consecutive floats.
     const base = triIdx.mul(9).toVar();
     const a = vec3(verts.element(base), verts.element(base.add(1)), verts.element(base.add(2)));
-    const b = vec3(verts.element(base.add(3)), verts.element(base.add(4)), verts.element(base.add(5)));
-    const c = vec3(verts.element(base.add(6)), verts.element(base.add(7)), verts.element(base.add(8)));
+    const b = vec3(
+      verts.element(base.add(3)),
+      verts.element(base.add(4)),
+      verts.element(base.add(5)),
+    );
+    const c = vec3(
+      verts.element(base.add(6)),
+      verts.element(base.add(7)),
+      verts.element(base.add(8)),
+    );
 
     // Reflect barycentric sample into the lower-triangle region so the distribution is
     // uniform over triangle area. If u+v > 1, flip to (1-u, 1-v).
@@ -155,11 +166,7 @@ export class InitFromMesh implements ParticleSpawnModule {
     const r = hash(ctx.seed.add(2001));
     const idx = r.mul(count).floor().toInt().toVar();
     const base = idx.mul(3);
-    return vec3(
-      points.element(base),
-      points.element(base.add(1)),
-      points.element(base.add(2)),
-    );
+    return vec3(points.element(base), points.element(base.add(1)), points.element(base.add(2)));
   }
 
   toJSON(): ModuleJSON {
@@ -191,9 +198,7 @@ function buildTriangleCdf(geometry: THREE.BufferGeometry): {
   }
   const indexAttr = geometry.getIndex();
 
-  const triCount = indexAttr
-    ? Math.floor(indexAttr.count / 3)
-    : Math.floor(posAttr.count / 3);
+  const triCount = indexAttr ? Math.floor(indexAttr.count / 3) : Math.floor(posAttr.count / 3);
   if (triCount === 0) {
     throw new Error("plume: InitFromMesh geometry has no triangles");
   }
@@ -255,10 +260,7 @@ function buildTriangleCdf(geometry: THREE.BufferGeometry): {
  */
 const volumeSampleCache = new WeakMap<THREE.BufferGeometry, Map<number, Float32Array>>();
 
-function getCachedVolumeSamples(
-  geometry: THREE.BufferGeometry,
-  count: number,
-): Float32Array {
+function getCachedVolumeSamples(geometry: THREE.BufferGeometry, count: number): Float32Array {
   let byCount = volumeSampleCache.get(geometry);
   if (!byCount) {
     byCount = new Map();
@@ -279,10 +281,7 @@ function getCachedVolumeSamples(
  * we accept whatever was last tried (keeps construction bounded for thin or degenerate meshes
  * at the cost of slight sample bias).
  */
-function buildVolumeSamplePoints(
-  geometry: THREE.BufferGeometry,
-  count: number,
-): Float32Array {
+function buildVolumeSamplePoints(geometry: THREE.BufferGeometry, count: number): Float32Array {
   const posAttr = geometry.getAttribute("position");
   if (!posAttr || !(posAttr instanceof THREE.BufferAttribute)) {
     throw new Error("plume: InitFromMesh volume mode requires a 'position' BufferAttribute");
@@ -292,10 +291,7 @@ function buildVolumeSamplePoints(
   // DoubleSide material ensures the raycaster counts BOTH front- and back-facing hits, which
   // is required for the parity (odd = inside) test to work. Default materials are FrontSide,
   // which back-culls exit faces and inverts the test.
-  const tmpMesh = new THREE.Mesh(
-    geometry,
-    new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }),
-  );
+  const tmpMesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
   tmpMesh.updateMatrixWorld(true);
 
   // Bounding box in mesh-local space (which is what sampled points will be in).
@@ -339,7 +335,6 @@ function buildVolumeSamplePoints(
   if (filled === 0) {
     // Fallback: mesh is open, degenerate, or our rays missed. Fill with AABB samples so the
     // kernel still has valid data. Warn the caller so they know something's off.
-    // eslint-disable-next-line no-console
     console.warn(
       "plume: InitFromMesh volume sampling found 0 interior points — mesh may be open/non-manifold. Falling back to bounding-box samples.",
     );

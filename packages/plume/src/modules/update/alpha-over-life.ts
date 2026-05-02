@@ -30,9 +30,7 @@ export class AlphaOverLife implements ParticleUpdateModule {
     const curveValue = texNode.sample(vec2(t, 0.5)).r;
     const current = ctx.storage.color.element(ctx.i);
     const initial = ctx.storage.initialColor.element(ctx.i);
-    ctx.storage.color
-      .element(ctx.i)
-      .assign(vec4(current.rgb, initial.a.mul(curveValue)));
+    ctx.storage.color.element(ctx.i).assign(vec4(current.rgb, initial.a.mul(curveValue)));
   }
 
   toJSON(): ModuleJSON {

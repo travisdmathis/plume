@@ -62,9 +62,7 @@ export async function dumpShaders(
   options: DumpOptions = {},
 ): Promise<ShaderDump> {
   const emitters: Emitter[] = "emitters" in target ? target.emitters : [target];
-  const perEmitter = await Promise.all(
-    emitters.map((em) => dumpEmitter(renderer, em, options)),
-  );
+  const perEmitter = await Promise.all(emitters.map((em) => dumpEmitter(renderer, em, options)));
   return {
     emitters: perEmitter,
     markdown: () => formatMarkdown(perEmitter),
@@ -80,9 +78,11 @@ async function dumpEmitter(
 
   // Internal access — three.js exposes compute-shader retrieval via `renderer._nodes.getForCompute`,
   // the same hook it uses itself to look up cached WGSL. Still works today, version-gated to 0.184.
-  const nodes = (renderer as unknown as {
-    _nodes?: { getForCompute: (n: ComputeNode) => { computeShader?: string } };
-  })._nodes;
+  const nodes = (
+    renderer as unknown as {
+      _nodes?: { getForCompute: (n: ComputeNode) => { computeShader?: string } };
+    }
+  )._nodes;
 
   const kernelShader = (kernel: ComputeNode | undefined): string | null => {
     if (!kernel || !nodes) return null;
@@ -120,7 +120,6 @@ async function dumpEmitter(
         render = { vertex: result.vertexShader, fragment: result.fragmentShader };
       } catch (err) {
         render = { vertex: null, fragment: null };
-        // eslint-disable-next-line no-console
         console.warn(`plume: getShaderAsync failed for "${name}":`, err);
       }
     }

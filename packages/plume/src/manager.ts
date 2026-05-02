@@ -189,7 +189,10 @@ export class Manager {
             obj.visible = prevVisible;
           });
           obj.traverse((child) => {
-            const maybeInstanced = child as unknown as { isInstancedMesh?: boolean; count?: number };
+            const maybeInstanced = child as unknown as {
+              isInstancedMesh?: boolean;
+              count?: number;
+            };
             if (maybeInstanced.isInstancedMesh && typeof maybeInstanced.count === "number") {
               const prevCount = maybeInstanced.count;
               maybeInstanced.count = 1;

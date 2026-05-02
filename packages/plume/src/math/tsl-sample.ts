@@ -76,7 +76,11 @@ export function colorInputRgbTSL(input: ColorInput, seed: Node<"float">, offset 
  * Return a TSL vec3 node for a position sampled from an EmissionShape (local space).
  * Caller is responsible for transforming to world space via `worldMatrix.mul(vec4(p, 1))`.
  */
-export function samplePositionTSL(shape: EmissionShape, seed: Node<"float">, offset = 0): Node<"vec3"> {
+export function samplePositionTSL(
+  shape: EmissionShape,
+  seed: Node<"float">,
+  offset = 0,
+): Node<"vec3"> {
   switch (shape.kind) {
     case "point":
       return vec3(0, 0, 0);
@@ -122,7 +126,9 @@ export function samplePositionTSL(shape: EmissionShape, seed: Node<"float">, off
       const thickness = shape.thickness ?? 1;
       const rInner = shape.radius * (1 - thickness);
       const t = hash(seed.add(offset));
-      const r = sqrt(float(rInner * rInner).add(float(shape.radius * shape.radius - rInner * rInner).mul(t)));
+      const r = sqrt(
+        float(rInner * rInner).add(float(shape.radius * shape.radius - rInner * rInner).mul(t)),
+      );
       const theta = hash(seed.add(offset + 1)).mul(TWO_PI);
       return vec3(cos(theta).mul(r), 0, sin(theta).mul(r));
     }
@@ -134,7 +140,11 @@ export function samplePositionTSL(shape: EmissionShape, seed: Node<"float">, off
  * within the cone's half-angle around +Y; for "sphere" it's a uniform unit sphere direction.
  * Other shapes fall back to sphere sampling.
  */
-export function sampleDirectionTSL(shape: EmissionShape, seed: Node<"float">, offset = 0): Node<"vec3"> {
+export function sampleDirectionTSL(
+  shape: EmissionShape,
+  seed: Node<"float">,
+  offset = 0,
+): Node<"vec3"> {
   switch (shape.kind) {
     case "point":
       return vec3(0, 1, 0);

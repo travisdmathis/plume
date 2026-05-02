@@ -20,14 +20,7 @@ export type { GradientStop } from "./math/gradient.js";
 export { samplePosition, sampleDirection } from "./math/shapes.js";
 export type { EmissionShape } from "./math/shapes.js";
 export { sampleScalar, sampleVec3, sampleColor } from "./math/sample.js";
-export {
-  sdfSphere,
-  sdfBox,
-  sdfPlane,
-  sdfUnion,
-  sdfIntersect,
-  sdfSubtract,
-} from "./math/sdf.js";
+export { sdfSphere, sdfBox, sdfPlane, sdfUnion, sdfIntersect, sdfSubtract } from "./math/sdf.js";
 export type { SdfFn } from "./math/sdf.js";
 
 // Storage
@@ -103,7 +96,10 @@ export type { CurlNoiseForceParams } from "./modules/update/curl-noise-force.js"
 export { VortexForce } from "./modules/update/vortex-force.js";
 export type { VortexForceParams } from "./modules/update/vortex-force.js";
 export { PointAttractor } from "./modules/update/point-attractor.js";
-export type { PointAttractorFalloff, PointAttractorParams } from "./modules/update/point-attractor.js";
+export type {
+  PointAttractorFalloff,
+  PointAttractorParams,
+} from "./modules/update/point-attractor.js";
 export { ScaleBySpeed } from "./modules/update/scale-by-speed.js";
 export type { ScaleBySpeedParams } from "./modules/update/scale-by-speed.js";
 export { PlaneCollision } from "./modules/update/plane-collision.js";
@@ -119,10 +115,7 @@ export type {
   DepthCollisionParams,
 } from "./modules/update/depth-collision.js";
 export { SdfCollision } from "./modules/update/sdf-collision.js";
-export type {
-  SdfCollisionMode,
-  SdfCollisionParams,
-} from "./modules/update/sdf-collision.js";
+export type { SdfCollisionMode, SdfCollisionParams } from "./modules/update/sdf-collision.js";
 
 // Render modules
 export { SpriteRenderer } from "./modules/render/sprite-renderer.js";
@@ -182,4 +175,3 @@ export {
   streakTexture,
   disposeTextureCache,
 } from "./textures/procedural.js";
-

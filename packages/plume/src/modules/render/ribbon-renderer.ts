@@ -242,7 +242,10 @@ export class RibbonRenderer implements RenderModule {
 
       // Map kLocal (0 = newest, N-1 = oldest) → actual ring-buffer slot.
       const headF = uHead;
-      const actualSlotF = headF.sub(kLocal).add(float(N * 2)).mod(float(N));
+      const actualSlotF = headF
+        .sub(kLocal)
+        .add(float(N * 2))
+        .mod(float(N));
       const pIdxF = float(pIdx);
       const slotIdx = pIdxF.mul(N).add(actualSlotF).toInt();
 
@@ -252,7 +255,10 @@ export class RibbonRenderer implements RenderModule {
 
       // Adjacent (one step older) for tangent — clamp to last to avoid out-of-range at tail.
       const kNext = kLocal.add(1).min(float(N - 1));
-      const nextSlotF = headF.sub(kNext).add(float(N * 2)).mod(float(N));
+      const nextSlotF = headF
+        .sub(kNext)
+        .add(float(N * 2))
+        .mod(float(N));
       const nextSlotIdx = pIdxF.mul(N).add(nextSlotF).toInt();
       const nextEntry = history.element(nextSlotIdx).toVar();
       const nextPos = nextEntry.xyz;
@@ -273,7 +279,10 @@ export class RibbonRenderer implements RenderModule {
       const validF = valid.select(float(1), float(0));
 
       // Head→tail taper (1 at newest, 0 at oldest), then mask by validity + alive.
-      const taper = float(1).sub(kLocal.div(float(N - 1))).mul(validF).mul(alive);
+      const taper = float(1)
+        .sub(kLocal.div(float(N - 1)))
+        .mul(validF)
+        .mul(alive);
       vTaper.assign(taper);
       vStale.assign(float(1).sub(validF));
 

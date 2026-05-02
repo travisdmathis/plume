@@ -34,9 +34,7 @@ export class InitVelocity implements ParticleSpawnModule {
     const localDir = sampleDirectionTSL(this.shape, ctx.seed, 30);
     const speed = scalarInputTSL(this.speed, ctx.seed, 40);
     const localVel = localDir.mul(speed);
-    const worldVel = this.worldSpace
-      ? ctx.worldMatrix.mul(vec4(localVel, 0.0)).xyz
-      : localVel;
+    const worldVel = this.worldSpace ? ctx.worldMatrix.mul(vec4(localVel, 0.0)).xyz : localVel;
     attr.velocity.write(ctx.storage, ctx.slot, worldVel);
   }
 

@@ -18,7 +18,6 @@ import {
 } from "three/tsl";
 
 import type { ParticleStorage } from "../../particle-buffer.js";
-import { attr } from "../../particle-buffer.js";
 import type { ModuleJSON, RenderContext, RenderModule } from "../module.js";
 import { registerModule } from "../registry.js";
 

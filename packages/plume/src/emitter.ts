@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type Node from "three/src/nodes/core/Node.js";
 import type ComputeNode from "three/src/nodes/gpgpu/ComputeNode.js";
 import type StorageBufferNode from "three/src/nodes/accessors/StorageBufferNode.js";
 import type UniformNode from "three/src/nodes/core/UniformNode.js";
@@ -37,8 +38,7 @@ import { SpawnFromEvents } from "./modules/spawn/spawn-from-events.js";
 // `atomicLoad` / `atomicAdd` return `AtomicFunctionNode` (three's typing widens away the
 // storage's element type). In practice the runtime result is whatever the storage holds;
 // all our atomic buffers are `uint` so this narrowing is sound.
-const asUint = (n: import("three/src/nodes/core/Node.js").default): Node<"uint"> =>
-  n as unknown as Node<"uint">;
+const asUint = (n: Node): Node<"uint"> => n as unknown as Node<"uint">;
 
 // Depth-sort key layout: upper DEPTH_BITS = quantized inverted depth, lower SLOT_BITS = slot
 // index. SLOT_BITS caps the maximum sortByDepth capacity; DEPTH_MAX_WORLD is the farthest
@@ -154,7 +154,7 @@ export class Emitter {
     // spawn-module decisions AND feeds the per-spawn GPU seed uniform below. If omitted, we
     // fall back to `Math.random()` for the seed so separate instances of the same prefab
     // don't correlate visually.
-    this._initialSeed = def.seed ?? ((Math.random() * 0xffffffff) >>> 0);
+    this._initialSeed = def.seed ?? (Math.random() * 0xffffffff) >>> 0;
     this.rng = new RNG(this._initialSeed);
     this._seeded = def.seed !== undefined;
     this.duration = def.duration;
@@ -195,7 +195,7 @@ export class Emitter {
           `plume: sortByDepth requires a power-of-two capacity (got ${def.capacity})`,
         );
       }
-      if (def.capacity > (1 << SLOT_BITS)) {
+      if (def.capacity > 1 << SLOT_BITS) {
         throw new Error(
           `plume: sortByDepth supports capacity ≤ ${1 << SLOT_BITS} (got ${def.capacity})`,
         );
@@ -576,6 +576,3 @@ export class Emitter {
     })().compute(this.buffer.capacity);
   }
 }
-
-// TypeScript companion so the `initSlot` helper can type its `eventPos` param.
-type Node<T = unknown> = import("three/src/nodes/core/Node.js").default<T>;

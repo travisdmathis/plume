@@ -36,7 +36,8 @@ renderer.toneMappingExposure = 1.0;
 app.appendChild(renderer.domElement);
 
 await renderer.init();
-const isWebGPU = (renderer.backend as { isWebGPUBackend?: boolean } | undefined)?.isWebGPUBackend === true;
+const isWebGPU =
+  (renderer.backend as { isWebGPUBackend?: boolean } | undefined)?.isWebGPUBackend === true;
 console.info(`plume: renderer backend = ${isWebGPU ? "WebGPU" : "WebGL2"}`);
 
 const scene = new THREE.Scene();
@@ -156,116 +157,118 @@ const manager = new Manager({ renderer, scene, camera, maxActive: 128, maxPoolPe
 
 /** Fiery explosion — flash + fire burst + dense rising smoke. */
 function explosionDef(): SystemDef {
-  return system("explosion")
-    .duration(3.0)
-    // Phase 3: dark smoke plume — added first so it renders behind the fire.
-    .emitter("smoke", (e) =>
-      e
-        .capacity(256)
-        .duration(0.6)
-        .spawnBurst([
-          { time: 0.15, count: 60 },
-          { time: 0.3, count: 50 },
-        ])
-        .lifetime({ min: 1.4, max: 2.2 })
-        // surface of a 0.8m sphere (thickness 0.15) — keeps smoke out of the fire's emission point
-        .position({ shape: { kind: "sphere", radius: 0.8, thickness: 0.15 } })
-        .velocity({
-          shape: { kind: "cone", angle: Math.PI * 0.45 },
-          speed: { min: 1.2, max: 3 },
-        })
-        .size({ min: 0.5, max: 1.1 })
-        .color({ min: [0.18, 0.16, 0.15], max: [0.32, 0.28, 0.26] }, { alpha: 0.45 })
-        .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -1.6, max: 1.6 } })
-        .integrate()
-        .gravity([0, 2.0, 0])
-        .drag(1.0)
-        .sizeOverLife([
-          [0, 1],
-          [1, 2.2],
-        ])
-        .alphaOverLife([
-          [0, 0.9],
-          [0.3, 1],
-          [1, 0],
-        ])
-        .renderSprite({ blending: "alpha", renderOrder: 10 }),
-    )
-    // Phase 2: bright fire spray — fast outward burst of hot particles.
-    .emitter("fire", (e) =>
-      e
-        .capacity(512)
-        .duration(0.08)
-        .spawnBurst({ time: 0, count: 380 })
-        .lifetime({ min: 0.45, max: 0.95 })
-        .position({ shape: { kind: "sphere", radius: 0.15, thickness: 1 } })
-        .velocity({
-          shape: { kind: "sphere", radius: 1 },
-          speed: { min: 6, max: 16 },
-        })
-        .size({ min: 0.35, max: 0.8 })
-        .color({
-          kind: "list",
-          values: [
-            [1.0, 0.95, 0.75],
-            [1.0, 0.7, 0.25],
-            [1.0, 0.45, 0.1],
-          ],
-        })
-        .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -5, max: 5 } })
-        .integrate()
-        .gravity([0, 6, 0]) // strong buoyancy
-        .drag(2.2)
-        .turbulence({ amplitude: 12, frequency: 1.2, speed: 2.5 })
-        .colorOverLife([
-          { t: 0, color: [3.5, 2.6, 1.2, 1] }, // HDR hot core — above bloom threshold
-          { t: 0.25, color: [2.0, 0.9, 0.25, 1] },
-          { t: 0.7, color: [0.6, 0.15, 0.05, 1] },
-          { t: 1, color: [0.08, 0.03, 0.02, 1] },
-        ])
-        .sizeOverLife([
-          [0, 1],
-          [0.3, 1.4],
-          [1, 0.5],
-        ])
-        .alphaOverLife([
-          [0, 1],
-          [0.5, 0.8],
-          [1, 0],
-        ])
-        .renderSprite({ blending: "additive", renderOrder: 20 }),
-    )
-    // Phase 1: instantaneous bright flash (single huge additive quad).
-    .emitter("flash", (e) =>
-      e
-        .capacity(4)
-        .duration(0.02)
-        .spawnBurst({ time: 0, count: 3 })
-        .lifetime(0.18)
-        .position({ shape: { kind: "point" } })
-        .velocity({ shape: { kind: "point" }, speed: 0 })
-        .size({ min: 4.5, max: 6.5 })
-        .color([1.0, 0.95, 0.75], { alpha: 1 })
-        .rotation({ min: 0, max: Math.PI * 2 })
-        .integrate()
-        .colorOverLife([
-          { t: 0, color: [4.0, 3.2, 2.0, 1] }, // bright HDR flash core
-          { t: 0.4, color: [2.0, 1.5, 0.8, 1] },
-          { t: 1, color: [0.2, 0.1, 0.05, 1] },
-        ])
-        .sizeOverLife([
-          [0, 1],
-          [0.5, 1.4],
-          [1, 0.2],
-        ])
-        .alphaOverLife([
-          [0, 1],
-          [0.2, 0.9],
-          [1, 0],
-        ])
-        .renderSprite({ blending: "additive", renderOrder: 30 }),
-    )
-    .build();
+  return (
+    system("explosion")
+      .duration(3.0)
+      // Phase 3: dark smoke plume — added first so it renders behind the fire.
+      .emitter("smoke", (e) =>
+        e
+          .capacity(256)
+          .duration(0.6)
+          .spawnBurst([
+            { time: 0.15, count: 60 },
+            { time: 0.3, count: 50 },
+          ])
+          .lifetime({ min: 1.4, max: 2.2 })
+          // surface of a 0.8m sphere (thickness 0.15) — keeps smoke out of the fire's emission point
+          .position({ shape: { kind: "sphere", radius: 0.8, thickness: 0.15 } })
+          .velocity({
+            shape: { kind: "cone", angle: Math.PI * 0.45 },
+            speed: { min: 1.2, max: 3 },
+          })
+          .size({ min: 0.5, max: 1.1 })
+          .color({ min: [0.18, 0.16, 0.15], max: [0.32, 0.28, 0.26] }, { alpha: 0.45 })
+          .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -1.6, max: 1.6 } })
+          .integrate()
+          .gravity([0, 2.0, 0])
+          .drag(1.0)
+          .sizeOverLife([
+            [0, 1],
+            [1, 2.2],
+          ])
+          .alphaOverLife([
+            [0, 0.9],
+            [0.3, 1],
+            [1, 0],
+          ])
+          .renderSprite({ blending: "alpha", renderOrder: 10 }),
+      )
+      // Phase 2: bright fire spray — fast outward burst of hot particles.
+      .emitter("fire", (e) =>
+        e
+          .capacity(512)
+          .duration(0.08)
+          .spawnBurst({ time: 0, count: 380 })
+          .lifetime({ min: 0.45, max: 0.95 })
+          .position({ shape: { kind: "sphere", radius: 0.15, thickness: 1 } })
+          .velocity({
+            shape: { kind: "sphere", radius: 1 },
+            speed: { min: 6, max: 16 },
+          })
+          .size({ min: 0.35, max: 0.8 })
+          .color({
+            kind: "list",
+            values: [
+              [1.0, 0.95, 0.75],
+              [1.0, 0.7, 0.25],
+              [1.0, 0.45, 0.1],
+            ],
+          })
+          .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -5, max: 5 } })
+          .integrate()
+          .gravity([0, 6, 0]) // strong buoyancy
+          .drag(2.2)
+          .turbulence({ amplitude: 12, frequency: 1.2, speed: 2.5 })
+          .colorOverLife([
+            { t: 0, color: [3.5, 2.6, 1.2, 1] }, // HDR hot core — above bloom threshold
+            { t: 0.25, color: [2.0, 0.9, 0.25, 1] },
+            { t: 0.7, color: [0.6, 0.15, 0.05, 1] },
+            { t: 1, color: [0.08, 0.03, 0.02, 1] },
+          ])
+          .sizeOverLife([
+            [0, 1],
+            [0.3, 1.4],
+            [1, 0.5],
+          ])
+          .alphaOverLife([
+            [0, 1],
+            [0.5, 0.8],
+            [1, 0],
+          ])
+          .renderSprite({ blending: "additive", renderOrder: 20 }),
+      )
+      // Phase 1: instantaneous bright flash (single huge additive quad).
+      .emitter("flash", (e) =>
+        e
+          .capacity(4)
+          .duration(0.02)
+          .spawnBurst({ time: 0, count: 3 })
+          .lifetime(0.18)
+          .position({ shape: { kind: "point" } })
+          .velocity({ shape: { kind: "point" }, speed: 0 })
+          .size({ min: 4.5, max: 6.5 })
+          .color([1.0, 0.95, 0.75], { alpha: 1 })
+          .rotation({ min: 0, max: Math.PI * 2 })
+          .integrate()
+          .colorOverLife([
+            { t: 0, color: [4.0, 3.2, 2.0, 1] }, // bright HDR flash core
+            { t: 0.4, color: [2.0, 1.5, 0.8, 1] },
+            { t: 1, color: [0.2, 0.1, 0.05, 1] },
+          ])
+          .sizeOverLife([
+            [0, 1],
+            [0.5, 1.4],
+            [1, 0.2],
+          ])
+          .alphaOverLife([
+            [0, 1],
+            [0.2, 0.9],
+            [1, 0],
+          ])
+          .renderSprite({ blending: "additive", renderOrder: 30 }),
+      )
+      .build()
+  );
 }
 
 /**
@@ -484,124 +487,126 @@ function cometTrailsDef(): SystemDef {
  *  3. `wispy_top` — faint outer wisps trailing off the top, sell the height.
  */
 function tornadoDef(): SystemDef {
-  return system("tornado")
-    .duration(6)
-    // ─── Ground debris: low, fast, fleeting. Spawns in a wide disk and gets sucked in. ───
-    .emitter("ground_debris", (e) =>
-      e
-        .capacity(256)
-        .duration(5.5)
-        .spawnRate(180)
-        .lifetime({ min: 0.6, max: 1.2 })
-        .position({ shape: { kind: "disc", radius: 2.2, thickness: 0.9 } })
-        .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.1, max: 0.6 } })
-        .size({ min: 0.08, max: 0.18 })
-        .color({ min: [0.38, 0.33, 0.28], max: [0.55, 0.48, 0.40] }, { alpha: 0.7 })
-        .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -2.5, max: 2.5 } })
-        .integrate()
-        // Pulled toward the tornado's base axis.
-        .pointAttractor({ position: [0, 0.1, 0], strength: 6, radius: 3, falloff: "linear" })
-        // Horizontal swirl; near zero axial lift here.
-        .vortex({ axis: [0, 1, 0], origin: [0, 0, 0], strength: 6 })
-        .curlNoise({ amplitude: 1.5, frequency: 1.2, speed: 1.0 })
-        .drag(0.4)
-        .limitVelocity({ maxSpeed: 8, damping: 0.2 })
-        .planeCollision({ normal: [0, 1, 0], point: [0, 0, 0], restitution: 0.15, friction: 0.8 })
-        .alphaOverLife([
-          [0, 0.9],
-          [0.3, 1],
-          [1, 0],
-        ])
-        .sizeOverLife([
-          [0, 0.8],
-          [1, 1.6],
-        ])
-        .renderSprite({ blending: "alpha", opacity: 0.9, depthWrite: false, renderOrder: 3 }),
-    )
-    // ─── Main funnel: dense tall column. Carves the tornado silhouette. ─────────────
-    .emitter("funnel", (e) =>
-      e
-        .capacity(1024)
-        .duration(5.5)
-        .sortByDepth()
-        .spawnRate(380)
-        // Long lifetimes so particles traverse the full vertical extent.
-        .lifetime({ min: 2.0, max: 3.5 })
-        // Very narrow seed ring at the base — the funnel widens naturally as particles age.
-        .position({ shape: { kind: "ring", radius: 0.35, thickness: 0.6 } })
-        .velocity({
-          shape: { kind: "cone", angle: Math.PI * 0.08 },
-          speed: { min: 0.2, max: 0.8 },
-        })
-        // Medium-to-large soft smoke billow.
-        .size({ min: 0.35, max: 0.65 })
-        // Dusty greys with slight warm tint; alpha low so layered billows read softly.
-        .color({ min: [0.35, 0.32, 0.30], max: [0.62, 0.55, 0.50] }, { alpha: 0.45 })
-        .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -1.2, max: 1.2 } })
-        .integrate()
-        // Strong lift — funnel rises fast.
-        .gravity([0, 3.5, 0])
-        // Tangential swirl around the Y-axis; dominant motion.
-        .vortex({ axis: [0, 1, 0], origin: [0, 0, 0], strength: 7 })
-        // Radial suck toward the axis, falling off with height. Combined with lift this
-        // creates the classic funnel profile: tight at the bottom, looser at the top.
-        .pointAttractor({ position: [0, 0.5, 0], strength: 5, radius: 4, falloff: "linear" })
-        // A second, weaker attractor higher up so the top doesn't flare out.
-        .pointAttractor({ position: [0, 4, 0], strength: 2, radius: 5, falloff: "linear" })
-        .curlNoise({ amplitude: 1.8, frequency: 0.5, speed: 0.6 })
-        .limitVelocity({ maxSpeed: 10, damping: 0.25 })
-        .alphaOverLife([
-          [0, 0],
-          [0.15, 1],
-          [0.75, 1],
-          [1, 0],
-        ])
-        .sizeOverLife([
-          [0, 0.6],
-          [0.5, 1.4],
-          [1, 2.2],
-        ])
-        .colorOverLife([
-          { t: 0, color: [0.4, 0.36, 0.32, 1] },
-          { t: 0.6, color: [0.55, 0.50, 0.46, 1] },
-          { t: 1, color: [0.7, 0.66, 0.62, 1] },
-        ])
-        .renderSprite({ blending: "alpha", opacity: 1, depthWrite: false, renderOrder: 5 }),
-    )
-    // ─── Wispy cap: faint fast-moving streamers at the top, give it height and motion. ─
-    .emitter("wispy_top", (e) =>
-      e
-        .capacity(128)
-        .duration(5.5)
-        .spawnRate(45)
-        .lifetime({ min: 1.5, max: 2.5 })
-        // Seed these up near the top of the funnel.
-        .position({ shape: { kind: "ring", radius: 1.2, thickness: 0.5 } })
-        .velocity({
-          shape: { kind: "cone", angle: Math.PI * 0.35 },
-          speed: { min: 0.8, max: 1.6 },
-        })
-        .size({ min: 0.5, max: 0.9 })
-        .color({ min: [0.55, 0.52, 0.48], max: [0.78, 0.74, 0.70] }, { alpha: 0.28 })
-        .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -0.8, max: 0.8 } })
-        .integrate()
-        .gravity([0, 1.2, 0])
-        // Weaker vortex; lets wisps drift outward at the cap.
-        .vortex({ axis: [0, 1, 0], origin: [0, 3, 0], strength: 2.5 })
-        .curlNoise({ amplitude: 2.0, frequency: 0.4, speed: 0.5 })
-        .drag(0.3)
-        .alphaOverLife([
-          [0, 0],
-          [0.25, 1],
-          [1, 0],
-        ])
-        .sizeOverLife([
-          [0, 0.8],
-          [1, 2.5],
-        ])
-        .renderSprite({ blending: "alpha", opacity: 0.85, depthWrite: false, renderOrder: 7 }),
-    )
-    .build();
+  return (
+    system("tornado")
+      .duration(6)
+      // ─── Ground debris: low, fast, fleeting. Spawns in a wide disk and gets sucked in. ───
+      .emitter("ground_debris", (e) =>
+        e
+          .capacity(256)
+          .duration(5.5)
+          .spawnRate(180)
+          .lifetime({ min: 0.6, max: 1.2 })
+          .position({ shape: { kind: "disc", radius: 2.2, thickness: 0.9 } })
+          .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.1, max: 0.6 } })
+          .size({ min: 0.08, max: 0.18 })
+          .color({ min: [0.38, 0.33, 0.28], max: [0.55, 0.48, 0.4] }, { alpha: 0.7 })
+          .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -2.5, max: 2.5 } })
+          .integrate()
+          // Pulled toward the tornado's base axis.
+          .pointAttractor({ position: [0, 0.1, 0], strength: 6, radius: 3, falloff: "linear" })
+          // Horizontal swirl; near zero axial lift here.
+          .vortex({ axis: [0, 1, 0], origin: [0, 0, 0], strength: 6 })
+          .curlNoise({ amplitude: 1.5, frequency: 1.2, speed: 1.0 })
+          .drag(0.4)
+          .limitVelocity({ maxSpeed: 8, damping: 0.2 })
+          .planeCollision({ normal: [0, 1, 0], point: [0, 0, 0], restitution: 0.15, friction: 0.8 })
+          .alphaOverLife([
+            [0, 0.9],
+            [0.3, 1],
+            [1, 0],
+          ])
+          .sizeOverLife([
+            [0, 0.8],
+            [1, 1.6],
+          ])
+          .renderSprite({ blending: "alpha", opacity: 0.9, depthWrite: false, renderOrder: 3 }),
+      )
+      // ─── Main funnel: dense tall column. Carves the tornado silhouette. ─────────────
+      .emitter("funnel", (e) =>
+        e
+          .capacity(1024)
+          .duration(5.5)
+          .sortByDepth()
+          .spawnRate(380)
+          // Long lifetimes so particles traverse the full vertical extent.
+          .lifetime({ min: 2.0, max: 3.5 })
+          // Very narrow seed ring at the base — the funnel widens naturally as particles age.
+          .position({ shape: { kind: "ring", radius: 0.35, thickness: 0.6 } })
+          .velocity({
+            shape: { kind: "cone", angle: Math.PI * 0.08 },
+            speed: { min: 0.2, max: 0.8 },
+          })
+          // Medium-to-large soft smoke billow.
+          .size({ min: 0.35, max: 0.65 })
+          // Dusty greys with slight warm tint; alpha low so layered billows read softly.
+          .color({ min: [0.35, 0.32, 0.3], max: [0.62, 0.55, 0.5] }, { alpha: 0.45 })
+          .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -1.2, max: 1.2 } })
+          .integrate()
+          // Strong lift — funnel rises fast.
+          .gravity([0, 3.5, 0])
+          // Tangential swirl around the Y-axis; dominant motion.
+          .vortex({ axis: [0, 1, 0], origin: [0, 0, 0], strength: 7 })
+          // Radial suck toward the axis, falling off with height. Combined with lift this
+          // creates the classic funnel profile: tight at the bottom, looser at the top.
+          .pointAttractor({ position: [0, 0.5, 0], strength: 5, radius: 4, falloff: "linear" })
+          // A second, weaker attractor higher up so the top doesn't flare out.
+          .pointAttractor({ position: [0, 4, 0], strength: 2, radius: 5, falloff: "linear" })
+          .curlNoise({ amplitude: 1.8, frequency: 0.5, speed: 0.6 })
+          .limitVelocity({ maxSpeed: 10, damping: 0.25 })
+          .alphaOverLife([
+            [0, 0],
+            [0.15, 1],
+            [0.75, 1],
+            [1, 0],
+          ])
+          .sizeOverLife([
+            [0, 0.6],
+            [0.5, 1.4],
+            [1, 2.2],
+          ])
+          .colorOverLife([
+            { t: 0, color: [0.4, 0.36, 0.32, 1] },
+            { t: 0.6, color: [0.55, 0.5, 0.46, 1] },
+            { t: 1, color: [0.7, 0.66, 0.62, 1] },
+          ])
+          .renderSprite({ blending: "alpha", opacity: 1, depthWrite: false, renderOrder: 5 }),
+      )
+      // ─── Wispy cap: faint fast-moving streamers at the top, give it height and motion. ─
+      .emitter("wispy_top", (e) =>
+        e
+          .capacity(128)
+          .duration(5.5)
+          .spawnRate(45)
+          .lifetime({ min: 1.5, max: 2.5 })
+          // Seed these up near the top of the funnel.
+          .position({ shape: { kind: "ring", radius: 1.2, thickness: 0.5 } })
+          .velocity({
+            shape: { kind: "cone", angle: Math.PI * 0.35 },
+            speed: { min: 0.8, max: 1.6 },
+          })
+          .size({ min: 0.5, max: 0.9 })
+          .color({ min: [0.55, 0.52, 0.48], max: [0.78, 0.74, 0.7] }, { alpha: 0.28 })
+          .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -0.8, max: 0.8 } })
+          .integrate()
+          .gravity([0, 1.2, 0])
+          // Weaker vortex; lets wisps drift outward at the cap.
+          .vortex({ axis: [0, 1, 0], origin: [0, 3, 0], strength: 2.5 })
+          .curlNoise({ amplitude: 2.0, frequency: 0.4, speed: 0.5 })
+          .drag(0.3)
+          .alphaOverLife([
+            [0, 0],
+            [0.25, 1],
+            [1, 0],
+          ])
+          .sizeOverLife([
+            [0, 0.8],
+            [1, 2.5],
+          ])
+          .renderSprite({ blending: "alpha", opacity: 0.85, depthWrite: false, renderOrder: 7 }),
+      )
+      .build()
+  );
 }
 
 /** Plasma beams — R5 demo for BeamRenderer + ScaleBySpeed. */
@@ -644,64 +649,66 @@ function plasmaBeamsDef(): SystemDef {
 
 /** Ember swarm — R5 demo for LightEmission (illuminates scene) + SphereCollision. */
 function emberSwarmDef(): SystemDef {
-  return system("ember_swarm")
-    .duration(4)
-    // Visual embers — sprites.
-    .emitter("embers", (e) =>
-      e
-        .capacity(64)
-        .duration(3.5)
-        .spawnRate(20)
-        .lifetime({ min: 1.5, max: 2.5 })
-        .position({ shape: { kind: "sphere", radius: 0.2 } })
-        .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.5, max: 1.8 } })
-        .size({ min: 0.04, max: 0.1 })
-        .color({ min: [4, 2, 0.3], max: [5, 3.5, 1.2] }, { alpha: 1 })
-        .rotation(0)
-        .integrate()
-        .gravity([0, 1.5, 0]) // embers rise
-        .turbulence({ amplitude: 2.5, frequency: 1.2, speed: 0.8 })
-        .drag(0.4)
-        .sphereCollision({
-          center: [0, 0.5, 0],
-          radius: 1.5,
-          outside: false, // contain inside the sphere
-          restitution: 0.6,
-          friction: 0.9,
-        })
-        .alphaOverLife([
-          [0, 1],
-          [0.7, 1],
-          [1, 0],
-        ])
-        .renderSprite({ blending: "additive", opacity: 1 }),
-    )
-    // Ambient lights tracking the first 4 embers — illuminates the ground plane.
-    .emitter("embers_light", (e) =>
-      e
-        .capacity(64)
-        .duration(3.5)
-        .spawnRate(20)
-        .lifetime({ min: 1.5, max: 2.5 })
-        .position({ shape: { kind: "sphere", radius: 0.2 } })
-        .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.5, max: 1.8 } })
-        .size(1)
-        .color([1, 0.6, 0.2], { alpha: 1 })
-        .rotation(0)
-        .integrate()
-        .gravity([0, 1.5, 0])
-        .turbulence({ amplitude: 2.5, frequency: 1.2, speed: 0.8 })
-        .drag(0.4)
-        .sphereCollision({
-          center: [0, 0.5, 0],
-          radius: 1.5,
-          outside: false,
-          restitution: 0.6,
-          friction: 0.9,
-        })
-        .renderLight({ lightCount: 4, color: 0xffa060, intensity: 3, distance: 3, decay: 2 }),
-    )
-    .build();
+  return (
+    system("ember_swarm")
+      .duration(4)
+      // Visual embers — sprites.
+      .emitter("embers", (e) =>
+        e
+          .capacity(64)
+          .duration(3.5)
+          .spawnRate(20)
+          .lifetime({ min: 1.5, max: 2.5 })
+          .position({ shape: { kind: "sphere", radius: 0.2 } })
+          .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.5, max: 1.8 } })
+          .size({ min: 0.04, max: 0.1 })
+          .color({ min: [4, 2, 0.3], max: [5, 3.5, 1.2] }, { alpha: 1 })
+          .rotation(0)
+          .integrate()
+          .gravity([0, 1.5, 0]) // embers rise
+          .turbulence({ amplitude: 2.5, frequency: 1.2, speed: 0.8 })
+          .drag(0.4)
+          .sphereCollision({
+            center: [0, 0.5, 0],
+            radius: 1.5,
+            outside: false, // contain inside the sphere
+            restitution: 0.6,
+            friction: 0.9,
+          })
+          .alphaOverLife([
+            [0, 1],
+            [0.7, 1],
+            [1, 0],
+          ])
+          .renderSprite({ blending: "additive", opacity: 1 }),
+      )
+      // Ambient lights tracking the first 4 embers — illuminates the ground plane.
+      .emitter("embers_light", (e) =>
+        e
+          .capacity(64)
+          .duration(3.5)
+          .spawnRate(20)
+          .lifetime({ min: 1.5, max: 2.5 })
+          .position({ shape: { kind: "sphere", radius: 0.2 } })
+          .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.5, max: 1.8 } })
+          .size(1)
+          .color([1, 0.6, 0.2], { alpha: 1 })
+          .rotation(0)
+          .integrate()
+          .gravity([0, 1.5, 0])
+          .turbulence({ amplitude: 2.5, frequency: 1.2, speed: 0.8 })
+          .drag(0.4)
+          .sphereCollision({
+            center: [0, 0.5, 0],
+            radius: 1.5,
+            outside: false,
+            restitution: 0.6,
+            friction: 0.9,
+          })
+          .renderLight({ lightCount: 4, color: 0xffa060, intensity: 3, distance: 3, decay: 2 }),
+      )
+      .build()
+  );
 }
 
 /**
@@ -771,108 +778,107 @@ const _portalTorusGeom = (() => {
   return g;
 })();
 function portalDef(): SystemDef {
-  return system("portal")
-    .duration(8)
-    // ─── Rim: bright sparks tracing the torus surface ──────────────────
-    .emitter("rim", (e) =>
-      e
-        .capacity(512)
-        .duration(7.5)
-        .spawnRate(260)
-        .lifetime({ min: 0.5, max: 1.0 })
-        .fromMesh({
-          geometry: _portalTorusGeom,
-          fill: "surface",
-          worldSpace: true,
-        })
-        .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.05, max: 0.35 } })
-        .size({ min: 0.05, max: 0.1 })
-        .color({ min: [2.0, 4.0, 6.0], max: [3.0, 5.5, 7.5] }, { alpha: 1 })
-        .rotation({ min: 0, max: Math.PI * 2 })
-        .integrate()
-        .drag(2.5)
-        .turbulence({ amplitude: 0.8, frequency: 3.0, speed: 1.2 })
-        .alphaOverLife([
-          [0, 0],
-          [0.2, 1],
-          [0.75, 0.9],
-          [1, 0],
-        ])
-        .sizeOverLife([
-          [0, 1],
-          [1, 0.3],
-        ])
-        .renderSprite({ blending: "additive", renderOrder: 20 }),
-    )
-    // ─── Swirl: cyan glow churning inside the torus tube ───────────────
-    .emitter("swirl", (e) =>
-      e
-        .capacity(1024)
-        .duration(7.5)
-        .spawnRate(300)
-        .lifetime({ min: 1.4, max: 2.2 })
-        .fromMesh({
-          geometry: _portalTorusGeom,
-          fill: "volume",
-          volumeSampleCount: 4096,
-          worldSpace: true,
-        })
-        .velocity({ shape: { kind: "point" }, speed: 0 })
-        .size({ min: 0.04, max: 0.09 })
-        .color({ min: [0.3, 1.6, 2.8], max: [0.6, 2.2, 3.4] }, { alpha: 1 })
-        .rotation({ min: 0, max: Math.PI * 2 })
-        .integrate()
-        // Gentle vortex around Y so the glow rotates in the plane of the portal.
-        .vortex({ axis: [0, 1, 0], origin: [0, 0, 0], strength: 1.2 })
-        .turbulence({ amplitude: 0.6, frequency: 2.0, speed: 0.5 })
-        .drag(1.8)
-        .alphaOverLife([
-          [0, 0],
-          [0.15, 1],
-          [0.8, 1],
-          [1, 0],
-        ])
-        .renderSprite({ blending: "additive", renderOrder: 15 }),
-    )
-    // ─── Fog: atmospheric haze in the portal opening ───────────────────
-    .emitter("fog", (e) =>
-      e
-        .capacity(256)
-        .duration(7.5)
-        .sortByDepth()
-        .spawnRate(60)
-        .lifetime({ min: 1.8, max: 3.0 })
-        // Disc fills the inside of the torus ring (torus hole radius ≈ outer − minor ≈ 0.58).
-        .position({ shape: { kind: "disc", radius: 0.58, thickness: 1 } })
-        .velocity({
-          shape: { kind: "cone", angle: Math.PI * 0.5 },
-          speed: { min: 0.08, max: 0.25 },
-        })
-        .size({ min: 0.35, max: 0.65 })
-        .color({ min: [0.35, 0.65, 1.1], max: [0.55, 0.85, 1.4] }, { alpha: 0.35 })
-        .rotation(
-          { min: 0, max: Math.PI * 2 },
-          { angularVelocity: { min: -0.4, max: 0.4 } },
-        )
-        .integrate()
-        // Same-direction vortex as the swirl so the fog drifts with the portal's rotation.
-        .vortex({ axis: [0, 1, 0], origin: [0, 0, 0], strength: 0.8 })
-        .curlNoise({ amplitude: 0.3, frequency: 1.2, speed: 0.4 })
-        .drag(1.2)
-        .alphaOverLife([
-          [0, 0],
-          [0.3, 1],
-          [0.7, 1],
-          [1, 0],
-        ])
-        .sizeOverLife([
-          [0, 0.7],
-          [0.6, 1.1],
-          [1, 1.5],
-        ])
-        .renderSprite({ blending: "alpha", depthWrite: false, renderOrder: 10 }),
-    )
-    .build();
+  return (
+    system("portal")
+      .duration(8)
+      // ─── Rim: bright sparks tracing the torus surface ──────────────────
+      .emitter("rim", (e) =>
+        e
+          .capacity(512)
+          .duration(7.5)
+          .spawnRate(260)
+          .lifetime({ min: 0.5, max: 1.0 })
+          .fromMesh({
+            geometry: _portalTorusGeom,
+            fill: "surface",
+            worldSpace: true,
+          })
+          .velocity({ shape: { kind: "sphere", radius: 1 }, speed: { min: 0.05, max: 0.35 } })
+          .size({ min: 0.05, max: 0.1 })
+          .color({ min: [2.0, 4.0, 6.0], max: [3.0, 5.5, 7.5] }, { alpha: 1 })
+          .rotation({ min: 0, max: Math.PI * 2 })
+          .integrate()
+          .drag(2.5)
+          .turbulence({ amplitude: 0.8, frequency: 3.0, speed: 1.2 })
+          .alphaOverLife([
+            [0, 0],
+            [0.2, 1],
+            [0.75, 0.9],
+            [1, 0],
+          ])
+          .sizeOverLife([
+            [0, 1],
+            [1, 0.3],
+          ])
+          .renderSprite({ blending: "additive", renderOrder: 20 }),
+      )
+      // ─── Swirl: cyan glow churning inside the torus tube ───────────────
+      .emitter("swirl", (e) =>
+        e
+          .capacity(1024)
+          .duration(7.5)
+          .spawnRate(300)
+          .lifetime({ min: 1.4, max: 2.2 })
+          .fromMesh({
+            geometry: _portalTorusGeom,
+            fill: "volume",
+            volumeSampleCount: 4096,
+            worldSpace: true,
+          })
+          .velocity({ shape: { kind: "point" }, speed: 0 })
+          .size({ min: 0.04, max: 0.09 })
+          .color({ min: [0.3, 1.6, 2.8], max: [0.6, 2.2, 3.4] }, { alpha: 1 })
+          .rotation({ min: 0, max: Math.PI * 2 })
+          .integrate()
+          // Gentle vortex around Y so the glow rotates in the plane of the portal.
+          .vortex({ axis: [0, 1, 0], origin: [0, 0, 0], strength: 1.2 })
+          .turbulence({ amplitude: 0.6, frequency: 2.0, speed: 0.5 })
+          .drag(1.8)
+          .alphaOverLife([
+            [0, 0],
+            [0.15, 1],
+            [0.8, 1],
+            [1, 0],
+          ])
+          .renderSprite({ blending: "additive", renderOrder: 15 }),
+      )
+      // ─── Fog: atmospheric haze in the portal opening ───────────────────
+      .emitter("fog", (e) =>
+        e
+          .capacity(256)
+          .duration(7.5)
+          .sortByDepth()
+          .spawnRate(60)
+          .lifetime({ min: 1.8, max: 3.0 })
+          // Disc fills the inside of the torus ring (torus hole radius ≈ outer − minor ≈ 0.58).
+          .position({ shape: { kind: "disc", radius: 0.58, thickness: 1 } })
+          .velocity({
+            shape: { kind: "cone", angle: Math.PI * 0.5 },
+            speed: { min: 0.08, max: 0.25 },
+          })
+          .size({ min: 0.35, max: 0.65 })
+          .color({ min: [0.35, 0.65, 1.1], max: [0.55, 0.85, 1.4] }, { alpha: 0.35 })
+          .rotation({ min: 0, max: Math.PI * 2 }, { angularVelocity: { min: -0.4, max: 0.4 } })
+          .integrate()
+          // Same-direction vortex as the swirl so the fog drifts with the portal's rotation.
+          .vortex({ axis: [0, 1, 0], origin: [0, 0, 0], strength: 0.8 })
+          .curlNoise({ amplitude: 0.3, frequency: 1.2, speed: 0.4 })
+          .drag(1.2)
+          .alphaOverLife([
+            [0, 0],
+            [0.3, 1],
+            [0.7, 1],
+            [1, 0],
+          ])
+          .sizeOverLife([
+            [0, 0.7],
+            [0.6, 1.1],
+            [1, 1.5],
+          ])
+          .renderSprite({ blending: "alpha", depthWrite: false, renderOrder: 10 }),
+      )
+      .build()
+  );
 }
 
 /**
@@ -961,7 +967,9 @@ document
   .addEventListener("click", () => spawnSmoke(new THREE.Vector3(2, 0, 0)));
 document
   .getElementById("btn-orb")!
-  .addEventListener("click", () => manager.spawn("magic_orb", { position: new THREE.Vector3(-2, 0, 0) }));
+  .addEventListener("click", () =>
+    manager.spawn("magic_orb", { position: new THREE.Vector3(-2, 0, 0) }),
+  );
 document
   .getElementById("btn-fountain")!
   .addEventListener("click", () =>
@@ -969,19 +977,29 @@ document
   );
 document
   .getElementById("btn-debris")!
-  .addEventListener("click", () => manager.spawn("debris", { position: new THREE.Vector3(0, 0.2, 2) }));
+  .addEventListener("click", () =>
+    manager.spawn("debris", { position: new THREE.Vector3(0, 0.2, 2) }),
+  );
 document
   .getElementById("btn-comets")!
-  .addEventListener("click", () => manager.spawn("comet_trails", { position: new THREE.Vector3(0, 1.5, 0) }));
+  .addEventListener("click", () =>
+    manager.spawn("comet_trails", { position: new THREE.Vector3(0, 1.5, 0) }),
+  );
 document
   .getElementById("btn-tornado")!
-  .addEventListener("click", () => manager.spawn("tornado", { position: new THREE.Vector3(0, 0, 0) }));
+  .addEventListener("click", () =>
+    manager.spawn("tornado", { position: new THREE.Vector3(0, 0, 0) }),
+  );
 document
   .getElementById("btn-beams")!
-  .addEventListener("click", () => manager.spawn("plasma_beams", { position: new THREE.Vector3(0, 1, 0) }));
+  .addEventListener("click", () =>
+    manager.spawn("plasma_beams", { position: new THREE.Vector3(0, 1, 0) }),
+  );
 document
   .getElementById("btn-embers")!
-  .addEventListener("click", () => manager.spawn("ember_swarm", { position: new THREE.Vector3(0, 0.5, 0) }));
+  .addEventListener("click", () =>
+    manager.spawn("ember_swarm", { position: new THREE.Vector3(0, 0.5, 0) }),
+  );
 document.getElementById("btn-dump-shaders")!.addEventListener("click", async () => {
   // Spawn an explosion so we have a live system to interrogate, then dump every shader
   // (compute + render) to the console and also download it as markdown.
@@ -1002,17 +1020,16 @@ document.getElementById("btn-dump-shaders")!.addEventListener("click", async () 
   a.download = `plume-shaders-${Date.now()}.md`;
   a.click();
   URL.revokeObjectURL(url);
-  console.info(`plume: dumped ${dump.emitters.length} emitter(s) — file downloaded, full text in console`);
+  console.info(
+    `plume: dumped ${dump.emitters.length} emitter(s) — file downloaded, full text in console`,
+  );
 });
 
 document.getElementById("btn-mesh-volume")!.addEventListener("click", () => {
   // The portal preset emits in its local frame: torus axis = local +Y, fog disc = local XZ
   // plane. To stand the portal up so its opening faces the camera, we rotate the whole
   // system 90° around local X: that maps local +Y → world +Z (toward the camera).
-  const standUp = new THREE.Quaternion().setFromAxisAngle(
-    new THREE.Vector3(1, 0, 0),
-    -Math.PI / 2,
-  );
+  const standUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
   manager.spawn("portal", {
     position: new THREE.Vector3(0, 1.5, 0),
     quaternion: standUp,
