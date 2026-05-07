@@ -10,6 +10,9 @@ side is a thin orchestrator that wires compose-able modules into each emitter.
 
 ## Highlights
 
+- **Visual node editor** — Svelte 5 + @xyflow editor with a module palette, graph canvas,
+  inspector, undo/redo, autosave, JSON import/export, TypeScript code export, and a live
+  WebGPU preview pane.
 - **Pure-GPU pipeline** — SoA storage buffers, compute kernels for spawn/update/sort, no
   per-particle JS work.
 - **Events + sub-emitters** — particles atomically append death events; a second emitter
@@ -40,6 +43,9 @@ side is a thin orchestrator that wires compose-able modules into each emitter.
   Texture-driven motion via `FlowmapForce` (sample a flowmap, decode R/G as direction, push
   velocity). `MeshRenderer` composes user-supplied vertex/normal nodes instead of
   overriding them.
+- **Editor-ready shader presets** — soft, hard, smoke, spark, organic procedural fire,
+  texture-additive, texture-luma-alpha, magma mesh material, emissive mesh material, and
+  textured fire/smoke/ember starter assets.
 - **Shader dump** — export every generated compute + render WGSL for debugging.
 
 ## Quick start
@@ -111,6 +117,48 @@ renderer.setAnimationLoop((t) => {
 });
 ```
 
+## Visual editor
+
+`packages/plume-editor` is now the main authoring surface for Plume effects. It compiles
+node graphs into real `SystemDef` objects and hot-swaps them into a side-by-side three.js
+preview.
+
+```bash
+pnpm install
+pnpm --filter plume-editor dev
+```
+
+Current editor capabilities:
+
+- Node palette, graph canvas, inspector, typed controls, and live preview.
+- Graph persistence in localStorage, plus JSON save/load for sharing graphs.
+- Undo/redo and reachability highlighting for disconnected modules.
+- Code export that emits a fluent `system(...).emitter(...)` builder chain.
+- Support for textures, gradients, curves, geometry pickers, SDF pickers, emitter refs,
+  random color ranges, angular velocity, render order, collision params, and world-space
+  toggles.
+- Preview cleanup for live editing: old compiled prefab ids and inactive pools are
+  unregistered so repeated graph rebuilds do not leak cached systems.
+
+The editor ships with a preset gallery intended to show the range of the runtime:
+
+- `Arcane starburst`
+- `Cinematic fire plume`
+- `Hero smoke bloom`
+- `Black-hole galaxy`
+- `Monsoon sheet`
+- `Storm strike`
+- `Nova lances`
+- `Prismatic confetti burst`
+- `Dream snowfield`
+- `Crystal shatter`
+- `Living ember lights`
+- `Finale fireworks`
+
+The fire preset is intentionally built from layered procedural flame tongues, curling side
+wisps, smoke puffs, and ember streaks rather than a single repeated flame card, so it is a
+good stress test for organic motion and shader variation.
+
 ## Module library
 
 Thirty+ modules across four phases of the particle lifecycle:
@@ -125,13 +173,16 @@ Thirty+ modules across four phases of the particle lifecycle:
 - **Render**: `SpriteRenderer` (with SubUV animation), `MeshRenderer`, `RibbonRenderer`,
   `BeamRenderer`, `LightEmission`
 
-All modules are data-driven: serializable to JSON via `systemDefToJSON` / `systemDefFromJSON`.
+All modules are data-driven: serializable to JSON via `systemDefToJSON` /
+`systemDefFromJSON`. Serialization preserves event emitters, alpha depth sorting, light
+renderer settings, and module JSON so editor graphs and exported effects survive a round
+trip.
 
 ## Playground
 
 ```bash
 pnpm install
-pnpm dev
+pnpm --filter plume-playground dev
 ```
 
 Opens [`examples/playground`](./examples/playground) — every feature above has a
@@ -141,28 +192,28 @@ with sub-emitters, seeded determinism twin, shader dump).
 
 ## Packages
 
-| Package                     | Description                                      |
-| --------------------------- | ------------------------------------------------ |
-| [`plume`](./packages/plume) | Engine: modules, renderers, manager, TSL codegen |
-
-Planned:
-
-- `plume-presets` — curated game-ready prefabs (muzzle flashes, impacts, explosions)
-- `plume-editor` — visual node editor (separate package)
+| Package                                     | Description                                                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------- |
+| [`plume`](./packages/plume)                 | Engine: modules, renderers, manager, serialization, TSL codegen              |
+| [`plume-editor`](./packages/plume-editor)   | Visual node editor with live preview, preset gallery, graph save/load/export |
+| [`plume-playground`](./examples/playground) | Runtime demo harness for engine features and debugging                       |
 
 ## Development
 
 ```bash
 pnpm install
-pnpm -r build       # build every package
-pnpm -r typecheck   # tsc across the workspace
-pnpm -r lint
+pnpm build        # build engine + editor
+pnpm typecheck    # tsc / svelte-check across the workspace
+pnpm lint         # eslint + prettier check
 ```
+
+CI uses `pnpm/action-setup` and reads the exact pinned pnpm version from
+`package.json` (`packageManager: pnpm@10.13.1`).
 
 ## Requirements
 
 - Node 20+ (24 recommended)
-- pnpm 10+
+- pnpm 10.13.1+ (pinned by `packageManager`)
 - three.js `^0.184.0` (peer dependency)
 - WebGPU-capable browser (Chrome/Edge/Arc on desktop; Safari 18+ on macOS/iOS)
 

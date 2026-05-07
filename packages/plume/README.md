@@ -91,6 +91,13 @@ renderer.setAnimationLoop(() => {
 - Seeded determinism + fixed-timestep option for replays and tests.
 - LOD + frustum culling per spawn.
 - Batched compute dispatch — one GPU submit per tick regardless of active system count.
+- Pool warmup and explicit prefab cleanup via `Manager.preload(...)` and
+  `Manager.unregister(...)`.
+- Texture + shader hooks across renderers: multi-texture maps, custom TSL `colorNode`
+  callbacks, flowmap force fields, sprite-sheet animation, ribbons, beams, instanced
+  meshes, and particle-driven lights.
+- JSON serialization for system definitions, including event emitters, depth sorting, and
+  light renderer settings.
 - Shader dump for debugging the generated WGSL.
 
 ## Exports
@@ -104,10 +111,16 @@ renderer.setAnimationLoop(() => {
 
 Full type definitions ship with the package.
 
-## Docs + demos
+## Editor + demos
 
-See the [monorepo root](https://github.com/travisdmathis/plume) for the playground, the
-full roadmap, and every feature demo.
+See the [monorepo root](https://github.com/travisdmathis/plume) for the visual editor,
+playground, and preset gallery. The editor compiles Svelte/@xyflow node graphs into real
+`SystemDef` objects, previews them live in three.js, saves/loads graph JSON, and exports
+fluent TypeScript builder code.
+
+Included editor presets cover fire, smoke, magic sparks, black-hole galaxy, monsoon rain,
+lightning, plasma beams, confetti, snow, mesh shatter, ember lights, and multi-emitter
+fireworks.
 
 ## License
 
