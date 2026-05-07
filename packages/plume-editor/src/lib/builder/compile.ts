@@ -26,8 +26,8 @@ import type {
   DepthCollisionMode,
   DepthCollisionNormal,
   SdfCollisionMode,
-} from "plume";
-import { Curve1D, Gradient, system, sdfSphere, sdfBox, sdfPlane } from "plume";
+} from "three-plume";
+import { Curve1D, Gradient, system, sdfSphere, sdfBox, sdfPlane } from "three-plume";
 import { getSpec, type Params } from "./nodes.js";
 import { getTexture } from "./textures.js";
 import {

@@ -5,7 +5,7 @@
     "types": ["node", "vite/client"],
     "baseUrl": ".",
     "paths": {
-      "plume": ["../../packages/plume/src/index.ts"]
+      "three-plume": ["../../packages/plume/src/index.ts"]
     }
   },
   "include": ["src/**/*"]

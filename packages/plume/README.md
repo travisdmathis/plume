@@ -1,4 +1,4 @@
-# plume
+# three-plume
 
 GPU-first, Niagara-style VFX system for [three.js](https://threejs.org). Particle
 simulation runs entirely in compute shaders through three's TSL (Three Shading Language);
@@ -6,21 +6,35 @@ the CPU orchestrates composable modules, the GPU does all the per-particle work.
 
 **Pre-1.0** — API may change before release.
 
-## Install
+## Add to a three.js project
+
+Install the runtime package alongside three.js:
 
 ```bash
-npm i plume three
+npm i three-plume three
 ```
 
-`three` is a peer dependency at `^0.184.0`. A WebGPU-capable browser is required
-(Chrome/Edge/Arc on desktop; Safari 18+ on macOS/iOS).
+```bash
+pnpm add three-plume three
+```
+
+If your app already depends on `three@^0.184.0`, install `three-plume` by itself.
+Plume is ESM-only and runs on three's WebGPU renderer:
+
+```ts
+import { WebGPURenderer } from "three/webgpu";
+import { Manager, system } from "three-plume";
+```
+
+A WebGPU-capable browser is required (Chrome/Edge/Arc on desktop; Safari 18+ on
+macOS/iOS).
 
 ## Quick start
 
 ```ts
 import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
-import { Manager, system } from "plume";
+import { Manager, system } from "three-plume";
 
 const renderer = new WebGPURenderer();
 await renderer.init();

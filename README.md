@@ -6,7 +6,8 @@ Particle simulation runs entirely on the GPU through three.js's TSL (Three Shadi
 Language) — spawn, update, sort, and collision all live in compute shaders. The CPU
 side is a thin orchestrator that wires compose-able modules into each emitter.
 
-**Status:** pre-1.0. Not yet on npm. API will change before release.
+**Status:** pre-1.0. Runtime package publishes as `three-plume`. API will change before
+release.
 
 ## Highlights
 
@@ -48,20 +49,35 @@ side is a thin orchestrator that wires compose-able modules into each emitter.
   textured fire/smoke/ember starter assets.
 - **Shader dump** — export every generated compute + render WGSL for debugging.
 
-## Quick start
+## Add to a three.js project
 
-Install (peer deps: three ≥ 0.184):
+Install the runtime package alongside three.js:
 
 ```bash
-pnpm install
+npm i three-plume three
 ```
+
+```bash
+pnpm add three-plume three
+```
+
+If your app already has `three@^0.184.0`, install `three-plume` by itself. Plume is
+ESM-only and expects a WebGPU-capable renderer, so new effects should be driven from
+`WebGPURenderer`:
+
+```ts
+import { WebGPURenderer } from "three/webgpu";
+import { Manager, system } from "three-plume";
+```
+
+## Quick start
 
 Minimal emitter — a smoke puff:
 
 ```ts
 import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
-import { Manager, system } from "plume";
+import { Manager, system } from "three-plume";
 
 const renderer = new WebGPURenderer();
 await renderer.init();
@@ -194,7 +210,7 @@ with sub-emitters, seeded determinism twin, shader dump).
 
 | Package                                     | Description                                                                  |
 | ------------------------------------------- | ---------------------------------------------------------------------------- |
-| [`plume`](./packages/plume)                 | Engine: modules, renderers, manager, serialization, TSL codegen              |
+| [`three-plume`](./packages/plume)           | Engine: modules, renderers, manager, serialization, TSL codegen              |
 | [`plume-editor`](./packages/plume-editor)   | Visual node editor with live preview, preset gallery, graph save/load/export |
 | [`plume-playground`](./examples/playground) | Runtime demo harness for engine features and debugging                       |
 

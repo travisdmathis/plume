@@ -14,7 +14,7 @@
  * The compiler in `compile.ts` reads the same structure to instantiate plume modules.
  */
 
-import type { EmissionShape } from "plume";
+import type { EmissionShape } from "three-plume";
 
 export type Category = "emitter" | "spawn" | "init" | "update" | "render";
 

@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "plume": "workspace:*",
+    "three-plume": "workspace:*",
     "three": "^0.184.0"
   },
   "devDependencies": {

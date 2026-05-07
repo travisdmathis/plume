@@ -18,7 +18,7 @@ import {
   systemDefFromJSON,
   systemDefToJSON,
   type SystemDef,
-} from "plume";
+} from "three-plume";
 import { vec2, vec4 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 

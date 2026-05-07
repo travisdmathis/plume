@@ -4,7 +4,7 @@ import { fileURLToPath, URL } from "node:url";
 export default defineConfig({
   resolve: {
     alias: {
-      plume: fileURLToPath(new URL("../../packages/plume/src/index.ts", import.meta.url)),
+      "three-plume": fileURLToPath(new URL("../../packages/plume/src/index.ts", import.meta.url)),
     },
   },
   server: {

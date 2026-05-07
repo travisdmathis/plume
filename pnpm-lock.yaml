@@ -32,12 +32,12 @@ importers:
 
   examples/playground:
     dependencies:
-      plume:
-        specifier: workspace:*
-        version: link:../../packages/plume
       three:
         specifier: ^0.184.0
         version: 0.184.0
+      three-plume:
+        specifier: workspace:*
+        version: link:../../packages/plume
     devDependencies:
       '@types/three':
         specifier: ^0.184.0
@@ -69,15 +69,15 @@ importers:
       '@xyflow/svelte':
         specifier: ^1.1.0
         version: 1.5.2(svelte@5.55.5(@typescript-eslint/types@8.59.0))
-      plume:
-        specifier: workspace:*
-        version: link:../plume
       svelte:
         specifier: ^5.20.0
         version: 5.55.5(@typescript-eslint/types@8.59.0)
       three:
         specifier: ^0.184.0
         version: 0.184.0
+      three-plume:
+        specifier: workspace:*
+        version: link:../plume
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^5.0.0

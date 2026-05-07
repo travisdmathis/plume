@@ -15,7 +15,7 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "plume": ["../plume/src/index.ts"]
+      "three-plume": ["../plume/src/index.ts"]
     },
     "allowSyntheticDefaultImports": true
   },

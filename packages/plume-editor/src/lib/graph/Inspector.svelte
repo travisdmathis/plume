@@ -5,7 +5,7 @@
    * Mutations flow through `updateNodeParam` so the graph store stays the single source
    * of truth for compilation.
    */
-  import type { EmissionShape } from "plume";
+  import type { EmissionShape } from "three-plume";
   import {
     getSpec,
     type Field,

@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [svelte()],
   resolve: {
     alias: {
-      plume: fileURLToPath(new URL("../plume/src/index.ts", import.meta.url)),
+      "three-plume": fileURLToPath(new URL("../plume/src/index.ts", import.meta.url)),
     },
   },
   server: {

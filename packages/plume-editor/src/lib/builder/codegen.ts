@@ -122,7 +122,7 @@ export function generateCode(nodes: GraphNode[], edges: GraphEdge[] = []): strin
     }
     for (const p of presets) plumeImports.push(p);
   }
-  importLines.push(`import { ${plumeImports.join(", ")} } from "plume";`);
+  importLines.push(`import { ${plumeImports.join(", ")} } from "three-plume";`);
 
   return [
     ...importLines,

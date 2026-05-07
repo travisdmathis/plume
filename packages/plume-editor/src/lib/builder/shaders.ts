@@ -22,7 +22,7 @@ import {
   time,
   mx_noise_float,
 } from "three/tsl";
-import type { ColorNodeContext, ColorNodeFn } from "plume";
+import type { ColorNodeContext, ColorNodeFn } from "three-plume";
 
 export type SpriteShader =
   | "soft"

@@ -7,7 +7,7 @@
   import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
   import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
   import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
-  import { Manager } from "plume";
+  import { Manager } from "three-plume";
 
   import { graphStore, updateNodeParam } from "../graph/graphStore.svelte.js";
   import { getSpec } from "../builder/nodes.js";
