@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "plume": ["../../packages/plume/src/index.ts"]
+    }
   },
   "include": ["src/**/*"]
 }
