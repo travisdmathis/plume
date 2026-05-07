@@ -1,9 +1,8 @@
 /**
  * Global editor state, exposed as a Svelte 5 rune-backed object.
  *
- * Kept tiny on purpose for session 1: just a counter the preview pane watches to know when
- * to rebuild from the graph, plus a status string for the header. Real graph state will
- * live in the GraphCanvas for now and pass through here as we wire compilation.
+ * Kept tiny on purpose: a counter the preview pane watches (Apply button), a status
+ * string for the header, and a "live" toggle that turns on debounced auto-apply.
  */
 
 interface EditorStore {
@@ -11,9 +10,12 @@ interface EditorStore {
   applyTick: number;
   /** Short message shown in the header. */
   statusText: string;
+  /** When true, every graph mutation auto-recompiles + respawns after a short debounce. */
+  live: boolean;
 }
 
 export const editorStore: EditorStore = $state({
   applyTick: 0,
-  statusText: "drag nodes onto the canvas, then Apply to spawn in the preview",
+  statusText: "drag wires between handles, edit params on the right, Apply to preview",
+  live: true,
 });

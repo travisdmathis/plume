@@ -13,6 +13,10 @@
     "strict": true,
     "useDefineForClassFields": true,
     "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "plume": ["../plume/src/index.ts"]
+    },
     "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*", "vite.config.ts", "src/**/*.svelte"]

@@ -128,6 +128,19 @@ export class Manager {
   }
 
   /**
+   * Remove a prefab registration and dispose any inactive pooled instances for it.
+   * Active instances are left alone; call `clear()` first when replacing a live preview.
+   */
+  unregister(id: string): void {
+    this._prefabs.delete(id);
+    const pool = this._pool.get(id);
+    if (pool) {
+      for (const sys of pool) sys.dispose();
+      this._pool.delete(id);
+    }
+  }
+
+  /**
    * Preload pooled instances of a prefab for hot spawning — also warms their compute
    * pipelines so the first real spawn doesn't stall. Respects `maxPoolPer`; if `count` is
    * higher, the pool is capped and the rest are discarded. Call this for prefabs you plan
@@ -329,7 +342,7 @@ export class Manager {
       let lodScale = 1;
       let visible = true;
       if (entry.lod && frustumReady) {
-        sys.object3D.getWorldPosition(this._systemWorldPos);
+        this._systemWorldPos.copy(sys.position);
         const dist = this._cameraWorldPos.distanceTo(this._systemWorldPos);
         const maxDist = entry.lod.maxDistance;
         if (maxDist !== undefined) {

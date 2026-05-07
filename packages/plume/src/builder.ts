@@ -213,7 +213,7 @@ export class EmitterBuilder {
     this._spawn.push(new SpawnBurst({ bursts: Array.isArray(bursts) ? bursts : [bursts] }));
     return this;
   }
-  spawnFromEvents(source: Emitter, perEvent = 1, maxEventsPerFrame?: number): this {
+  spawnFromEvents(source: Emitter | string, perEvent = 1, maxEventsPerFrame?: number): this {
     this._spawn.push(new SpawnFromEvents({ source, perEvent, maxEventsPerFrame }));
     return this;
   }

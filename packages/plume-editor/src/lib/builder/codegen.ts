@@ -1,0 +1,435 @@
+/**
+ * Graph → TypeScript codegen.
+ *
+ * Emits the equivalent `system(...).emitter(...)` fluent-builder chain for the
+ * current graph. Output is a self-contained string that the user can paste into a
+ * `.ts` file and compile against the `plume` package — no runtime editor required.
+ *
+ * Mirrors the structure of `compile.ts`: BFS from the emitter, group reachable
+ * nodes by category in visit order, and walk each group emitting one builder call
+ * per node. Anything `compile.ts` can build, this can print.
+ */
+
+import { getSpec, type Params } from "./nodes.js";
+import type { GraphEdge, GraphNode } from "./compile.js";
+
+export function generateCode(nodes: GraphNode[], edges: GraphEdge[] = []): string {
+  const emitters = nodes.filter((n) => getSpec(n.data.type).category === "emitter");
+  if (emitters.length === 0) {
+    return "// Graph has no Emitter node — add one before exporting.";
+  }
+
+  const adj = new Map<string, string[]>();
+  for (const e of edges) {
+    if (!adj.has(e.source)) adj.set(e.source, []);
+    adj.get(e.source)!.push(e.target);
+  }
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+
+  function bfs(rootId: string): GraphNode[] {
+    const visited = new Set<string>();
+    const queue: string[] = [rootId];
+    const out: GraphNode[] = [];
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const node = byId.get(id);
+      if (!node) continue;
+      out.push(node);
+      for (const next of adj.get(id) ?? []) if (!visited.has(next)) queue.push(next);
+    }
+    return out;
+  }
+
+  const allReached: GraphNode[] = [];
+  const emitterBlocks: string[] = [];
+  let maxDuration = 0;
+  const eventSourceIds = new Set<string>();
+  for (const n of nodes) {
+    if (n.data.type !== "spawn.from_events") continue;
+    const ref = emitterRef(n.data.params, "source");
+    if (ref) eventSourceIds.add(ref);
+  }
+
+  for (const em of emitters) {
+    const reached = bfs(em.id);
+    allReached.push(...reached);
+    const capacity = readNumber(em.data.params, "capacity", 256);
+    const duration = readNumber(em.data.params, "duration", 2);
+    if (duration > maxDuration) maxDuration = duration;
+
+    const buckets = {
+      spawn: [] as GraphNode[],
+      init: [] as GraphNode[],
+      update: [] as GraphNode[],
+      render: [] as GraphNode[],
+    };
+    for (const n of reached) {
+      const cat = getSpec(n.data.type).category;
+      if (cat !== "emitter") buckets[cat].push(n);
+    }
+
+    const calls: string[] = [];
+    calls.push(`        .capacity(${capacity})`);
+    calls.push(`        .duration(${duration})`);
+    if (bool(em.data.params, "loop", true)) calls.push(`        .loop()`);
+    if (eventSourceIds.has(em.id)) calls.push(`        .emitEvents({ onDeath: true })`);
+    for (const n of buckets.spawn) calls.push(emitOne(n, "        "));
+    for (const n of buckets.init) calls.push(emitOne(n, "        "));
+    for (const n of buckets.update) calls.push(emitOne(n, "        "));
+    for (const n of buckets.render) calls.push(emitOne(n, "        "));
+
+    emitterBlocks.push(
+      [`  .emitter("${emitterNameFromId(em.id)}", (e) =>`, `    e`, calls.join("\n"), `  )`].join(
+        "\n",
+      ),
+    );
+  }
+
+  const types = new Set(allReached.map((n) => n.data.type));
+  const needsCurve = types.has("update.size_over_life") || types.has("update.velocity_over_life");
+  const needsGradient = types.has("update.color_over_life");
+  const hasAnyTexture = allReached.some((n) => {
+    const v = n.data.params["texture"];
+    return v && typeof v === "object" && !Array.isArray(v) && "kind" in v && v.kind === "texture";
+  });
+  const usesMesh = types.has("render.mesh") || types.has("init.from_mesh");
+  const usesSdf = types.has("update.sdf_collision");
+  const needsThree =
+    types.has("render.light") ||
+    hasAnyTexture ||
+    usesMesh ||
+    types.has("update.depth_collision") ||
+    types.has("update.flowmap_force");
+  const needsMeshMaterial = types.has("render.mesh");
+
+  const importLines: string[] = [];
+  if (needsThree) importLines.push(`import * as THREE from "three";`);
+  if (needsMeshMaterial)
+    importLines.push(`import { MeshStandardNodeMaterial } from "three/webgpu";`);
+  const plumeImports = ["system"];
+  if (needsCurve) plumeImports.push("Curve1D");
+  if (needsGradient) plumeImports.push("Gradient");
+  if (usesSdf) {
+    const presets = new Set<string>();
+    for (const n of allReached) {
+      if (n.data.type !== "update.sdf_collision") continue;
+      const v = n.data.params["sdf"];
+      if (v && typeof v === "object" && !Array.isArray(v) && "kind" in v && v.kind === "sdf") {
+        presets.add(`sdf${v.preset.charAt(0).toUpperCase()}${v.preset.slice(1)}`);
+      }
+    }
+    for (const p of presets) plumeImports.push(p);
+  }
+  importLines.push(`import { ${plumeImports.join(", ")} } from "plume";`);
+
+  return [
+    ...importLines,
+    ``,
+    `// Auto-generated by the plume editor. Pass into Manager.register / spawn.`,
+    `export const def = system("editor_graph")`,
+    `  .duration(${maxDuration + 1})`,
+    `  .loop()`,
+    ...emitterBlocks,
+    `  .build();`,
+    ``,
+  ].join("\n");
+}
+
+function emitterNameFromId(id: string): string {
+  return id.replace(/^emitter_/, "em_");
+}
+
+function emitOne(node: GraphNode, indent: string = "      "): string {
+  const p = node.data.params;
+  const ind = indent;
+  switch (node.data.type) {
+    // ── Spawn ──
+    case "spawn.rate":
+      return `${ind}.spawnRate(${num(p, "rate", 50)})`;
+    case "spawn.burst":
+      return `${ind}.spawnBurst({ time: ${num(p, "time", 0)}, count: ${num(p, "count", 100)} })`;
+    case "spawn.from_events": {
+      const ref = emitterRef(p, "source");
+      return `${ind}.spawnFromEvents(${JSON.stringify(ref ?? "TODO")}, ${num(p, "perEvent", 6)}, ${num(p, "maxEventsPerFrame", 64)})`;
+    }
+
+    // ── Init ──
+    case "init.lifetime": {
+      const [a, b] = range(p, "lifetime", [1, 2]);
+      return `${ind}.lifetime({ min: ${a}, max: ${b} })`;
+    }
+    case "init.position":
+      return `${ind}.position({ shape: ${shape(p, "shape")}, worldSpace: ${bool(p, "worldSpace", false)} })`;
+    case "init.velocity": {
+      const [a, b] = range(p, "speed", [1, 3]);
+      return `${ind}.velocity({ shape: ${shape(p, "shape")}, speed: { min: ${a}, max: ${b} }, worldSpace: ${bool(p, "worldSpace", false)} })`;
+    }
+    case "init.size": {
+      const [a, b] = range(p, "size", [0.1, 0.3]);
+      return `${ind}.size({ min: ${a}, max: ${b} })`;
+    }
+    case "init.color": {
+      const mode = sel(p, "mode", "solid");
+      const c = vec3(p, "color", [1, 1, 1]);
+      if (mode === "random range") {
+        const max = vec3(p, "colorMax", [1, 1, 1]);
+        return `${ind}.color({ min: [${c}], max: [${max}] }, { alpha: ${num(p, "alpha", 1)} })`;
+      }
+      return `${ind}.color([${c}], { alpha: ${num(p, "alpha", 1)} })`;
+    }
+    case "init.rotation": {
+      const [a, b] = range(p, "rotation", [0, Math.PI * 2]);
+      const [avMin, avMax] = range(p, "angularVelocity", [0, 0]);
+      const spin =
+        avMin !== 0 || avMax !== 0 ? `, { angularVelocity: { min: ${avMin}, max: ${avMax} } }` : "";
+      return `${ind}.rotation({ min: ${a}, max: ${b} }${spin})`;
+    }
+    case "init.from_mesh":
+      return `${ind}.fromMesh({ geometry: ${geometryLiteral(p, "geometry")}, fill: ${JSON.stringify(sel(p, "fill", "surface"))}, worldSpace: ${bool(p, "worldSpace", false)}, volumeSampleCount: ${num(p, "volumeSampleCount", 2048)} })`;
+
+    // ── Update ──
+    case "update.integrate":
+      return `${ind}.integrate()`;
+    case "update.gravity":
+      return `${ind}.gravity([${vec3(p, "acceleration", [0, -9.81, 0])}])`;
+    case "update.drag":
+      return `${ind}.drag(${num(p, "coefficient", 0.5)})`;
+    case "update.alpha_over_life": {
+      const fIn = clamp01(num(p, "fadeIn", 0.1));
+      const fOut = clamp01(num(p, "fadeOut", 0.3));
+      return `${ind}.alphaOverLife([[0, 0], [${fIn}, 1], [${1 - fOut}, 1], [1, 0]])`;
+    }
+    case "update.size_over_life":
+      return `${ind}.sizeOverLife(${curveLiteral(p, "curve", [
+        { t: 0, v: 1 },
+        { t: 1, v: 0.5 },
+      ])})`;
+    case "update.velocity_over_life":
+      return `${ind}.velocityOverLife(${curveLiteral(p, "curve", [
+        { t: 0, v: 1 },
+        { t: 1, v: 0 },
+      ])})`;
+    case "update.color_over_life":
+      return `${ind}.colorOverLife(${gradientLiteral(p, "gradient", [
+        { t: 0, color: [1, 1, 1, 1] },
+        { t: 1, color: [1, 0.4, 0.1, 0] },
+      ])})`;
+    case "update.curl_noise":
+      return `${ind}.curlNoise({ amplitude: ${num(p, "amplitude", 2)}, frequency: ${num(p, "frequency", 1)}, speed: ${num(p, "speed", 0.5)} })`;
+    case "update.turbulence":
+      return `${ind}.turbulence({ amplitude: ${num(p, "amplitude", 2)}, frequency: ${num(p, "frequency", 1)}, speed: ${num(p, "speed", 0.5)}, octaves: ${num(p, "octaves", 3)} })`;
+    case "update.vortex":
+      return `${ind}.vortex({ axis: [${vec3(p, "axis", [0, 1, 0])}], origin: [${vec3(p, "origin", [0, 0, 0])}], strength: ${num(p, "strength", 5)}, worldSpace: ${bool(p, "worldSpace", false)} })`;
+    case "update.point_attractor":
+      return `${ind}.pointAttractor({ position: [${vec3(p, "position", [0, 0, 0])}], strength: ${num(p, "strength", 5)}, radius: ${num(p, "radius", 2)}, falloff: ${JSON.stringify(sel(p, "falloff", "inverseSquared"))}, worldSpace: ${bool(p, "worldSpace", false)} })`;
+    case "update.limit_velocity":
+      return `${ind}.limitVelocity({ maxSpeed: ${num(p, "maxSpeed", 10)}, damping: ${num(p, "damping", 1)} })`;
+    case "update.scale_by_speed":
+      return `${ind}.scaleBySpeed({ minSpeed: ${num(p, "minSpeed", 0)}, maxSpeed: ${num(p, "maxSpeed", 5)}, minScale: ${num(p, "minScale", 1)}, maxScale: ${num(p, "maxScale", 2)} })`;
+    case "update.plane_collision":
+      return `${ind}.planeCollision({ normal: [${vec3(p, "normal", [0, 1, 0])}], point: [${vec3(p, "point", [0, 0, 0])}], restitution: ${num(p, "restitution", 0.5)}, friction: ${num(p, "friction", 0.9)}, worldSpace: ${bool(p, "worldSpace", false)} })`;
+    case "update.sphere_collision":
+      return `${ind}.sphereCollision({ center: [${vec3(p, "center", [0, 0, 0])}], radius: ${num(p, "radius", 1)}, outside: ${sel(p, "side", "outside") === "outside"}, restitution: ${num(p, "restitution", 0.5)}, friction: ${num(p, "friction", 0.9)}, worldSpace: ${bool(p, "worldSpace", false)} })`;
+
+    case "update.flowmap_force": {
+      const tex = textureRef(p, "texture");
+      const sz = range(p, "size", [4, 4]);
+      const texture =
+        tex ?? "undefined as unknown as THREE.Texture /* TODO: assign a flowmap texture */";
+      return `${ind}.flowmapForce({ texture: ${texture}, origin: [${vec3(p, "origin", [0, 0, 0])}], size: [${sz[0]}, ${sz[1]}], axis: ${JSON.stringify(sel(p, "axis", "xz"))}, amplitude: ${num(p, "amplitude", 1)} })`;
+    }
+    case "update.sdf_collision":
+      return `${ind}.sdfCollision({ sdf: ${sdfLiteral(p, "sdf")}, mode: ${JSON.stringify(sel(p, "mode", "bounce"))}, restitution: ${num(p, "restitution", 0.5)}, friction: ${num(p, "friction", 0.9)}, thickness: ${num(p, "thickness", 0.02)}, gradientEpsilon: ${num(p, "gradientEpsilon", 0.01)} })`;
+    case "update.depth_collision":
+      // The user must wire camera + depthTexture themselves in the exported code.
+      return `${ind}.depthCollision({ camera: /* TODO: your camera */ undefined as unknown as THREE.Camera, depthTexture: /* TODO: your depth target's depthTexture */ undefined as unknown as THREE.Texture, mode: ${JSON.stringify(sel(p, "mode", "bounce"))}, normal: ${JSON.stringify(sel(p, "normal", "depth-gradient"))}, restitution: ${num(p, "restitution", 0.5)}, friction: ${num(p, "friction", 0.9)}, thickness: ${num(p, "thickness", 0.0005)} })`;
+
+    // ── Render ──
+    case "render.sprite": {
+      const tex = textureRef(p, "texture");
+      return `${shaderComment(p, ind)}${ind}.renderSprite({ ${tex ? `textures: { base: ${tex} }, ` : ""}blending: ${JSON.stringify(sel(p, "blending", "additive"))}, opacity: ${num(p, "opacity", 1)}, renderOrder: ${num(p, "renderOrder", 0)} })`;
+    }
+    case "render.ribbon": {
+      const tex = textureRef(p, "texture");
+      return `${shaderComment(p, ind)}${ind}.renderRibbon({ ${tex ? `textures: { base: ${tex} }, ` : ""}width: ${num(p, "width", 0.05)}, historyLength: ${num(p, "historyLength", 32)}, blending: ${JSON.stringify(sel(p, "blending", "additive"))}, opacity: ${num(p, "opacity", 1)}, renderOrder: ${num(p, "renderOrder", 0)} })`;
+    }
+    case "render.beam": {
+      const tex = textureRef(p, "texture");
+      return `${shaderComment(p, ind)}${ind}.renderBeam({ ${tex ? `textures: { base: ${tex} }, ` : ""}width: ${num(p, "width", 0.05)}, taperToTail: ${sel(p, "taper", "to-tail") === "to-tail"}, blending: ${JSON.stringify(sel(p, "blending", "additive"))}, opacity: ${num(p, "opacity", 1)}, renderOrder: ${num(p, "renderOrder", 0)} })`;
+    }
+    case "render.light": {
+      const c = vec3(p, "color", [1, 0.85, 0.6]);
+      return `${ind}.renderLight({ lightCount: ${num(p, "lightCount", 4)}, color: new THREE.Color(${c}), intensity: ${num(p, "intensity", 1)}, distance: ${num(p, "distance", 5)}, decay: ${num(p, "decay", 2)} })`;
+    }
+    case "render.mesh": {
+      const c = vec3(p, "color", [1, 1, 1]);
+      return `${ind}.renderMesh({ geometry: ${geometryLiteral(p, "geometry")}, material: (() => { const m = new MeshStandardNodeMaterial(); m.color = new THREE.Color(${c}); m.metalness = ${num(p, "metalness", 0.1)}; m.roughness = ${num(p, "roughness", 0.4)}; return m; })(), renderOrder: ${num(p, "renderOrder", 0)} })`;
+    }
+
+    default:
+      return `${ind}/* unsupported node type: ${node.data.type} */`;
+  }
+}
+
+// ─ Param accessors ────────────────────────────────────────────────────────
+
+function readNumber(p: Params, key: string, fallback: number): number {
+  const v = p[key];
+  return typeof v === "number" ? v : fallback;
+}
+function num(p: Params, key: string, fallback: number): number {
+  return readNumber(p, key, fallback);
+}
+function vec3(p: Params, key: string, fallback: [number, number, number]): string {
+  const v = p[key];
+  if (
+    Array.isArray(v) &&
+    v.length === 3 &&
+    typeof v[0] === "number" &&
+    typeof v[1] === "number" &&
+    typeof v[2] === "number"
+  ) {
+    return `${v[0]}, ${v[1]}, ${v[2]}`;
+  }
+  return `${fallback[0]}, ${fallback[1]}, ${fallback[2]}`;
+}
+function range(p: Params, key: string, fallback: [number, number]): [number, number] {
+  const v = p[key];
+  if (Array.isArray(v) && v.length === 2 && typeof v[0] === "number" && typeof v[1] === "number") {
+    return [v[0], v[1]];
+  }
+  return fallback;
+}
+function sel(p: Params, key: string, fallback: string): string {
+  const v = p[key];
+  return typeof v === "string" ? v : fallback;
+}
+function bool(p: Params, key: string, fallback: boolean): boolean {
+  const v = p[key];
+  return typeof v === "boolean" ? v : fallback;
+}
+function shape(p: Params, key: string): string {
+  const v = p[key];
+  return JSON.stringify(
+    v && typeof v === "object" ? v : { kind: "sphere", radius: 0.3, thickness: 1 },
+  );
+}
+function clamp01(n: number): number {
+  return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+function curveLiteral(p: Params, key: string, fallback: { t: number; v: number }[]): string {
+  const v = p[key];
+  let keys: { t: number; v: number }[] = fallback;
+  if (
+    v &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    "kind" in v &&
+    v.kind === "curve1d" &&
+    Array.isArray(v.keys)
+  ) {
+    keys = v.keys;
+  }
+  const inner = keys.map((k) => `{ t: ${k.t}, v: ${k.v} }`).join(", ");
+  return `new Curve1D([${inner}])`;
+}
+
+/**
+ * Returns a placeholder TS expression for a texture param. We do NOT inline the
+ * data URL — they're often hundreds of KB and would balloon the generated file.
+ * The placeholder reads as a TextureLoader call so the user can paste in their
+ * own asset path.
+ */
+function textureRef(p: Params, key: string): string | undefined {
+  const v = p[key];
+  if (v && typeof v === "object" && !Array.isArray(v) && "kind" in v && v.kind === "texture") {
+    const safeName = JSON.stringify((v as { name?: string }).name ?? "uploaded.png");
+    return `new THREE.TextureLoader().load(${safeName} /* TODO: replace with a real asset path */)`;
+  }
+  return undefined;
+}
+
+function geometryLiteral(p: Params, key: string): string {
+  const v = p[key];
+  if (v && typeof v === "object" && !Array.isArray(v) && "kind" in v && v.kind === "geometry") {
+    switch (v.preset) {
+      case "sphere":
+        return `new THREE.SphereGeometry(${v.radius}, ${v.widthSegments}, ${v.heightSegments})`;
+      case "box":
+        return `new THREE.BoxGeometry(${v.width}, ${v.height}, ${v.depth})`;
+      case "torus":
+        return `new THREE.TorusGeometry(${v.radius}, ${v.tube}, ${v.radialSegments}, ${v.tubularSegments})`;
+      case "cone":
+        return `new THREE.ConeGeometry(${v.radius}, ${v.height}, ${v.radialSegments})`;
+      case "cylinder":
+        return `new THREE.CylinderGeometry(${v.radiusTop}, ${v.radiusBottom}, ${v.height}, ${v.radialSegments})`;
+      case "plane":
+        return `new THREE.PlaneGeometry(${v.width}, ${v.height})`;
+    }
+  }
+  return `new THREE.SphereGeometry(0.5, 32, 16)`;
+}
+
+function sdfLiteral(p: Params, key: string): string {
+  const v = p[key];
+  if (v && typeof v === "object" && !Array.isArray(v) && "kind" in v && v.kind === "sdf") {
+    switch (v.preset) {
+      case "sphere":
+        return `sdfSphere([${v.center[0]}, ${v.center[1]}, ${v.center[2]}], ${v.radius})`;
+      case "box":
+        return `sdfBox([${v.center[0]}, ${v.center[1]}, ${v.center[2]}], [${v.halfSize[0]}, ${v.halfSize[1]}, ${v.halfSize[2]}])`;
+      case "plane":
+        return `sdfPlane([${v.point[0]}, ${v.point[1]}, ${v.point[2]}], [${v.normal[0]}, ${v.normal[1]}, ${v.normal[2]}])`;
+    }
+  }
+  return `sdfSphere([0, 0, 0], 1)`;
+}
+
+function emitterRef(p: Params, key: string): string | undefined {
+  const v = p[key];
+  if (
+    v &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    "kind" in v &&
+    v.kind === "emitter-ref" &&
+    typeof v.nodeId === "string"
+  ) {
+    return v.nodeId.replace(/^emitter_/, "em_");
+  }
+  return undefined;
+}
+
+function shaderComment(p: Params, indent: string): string {
+  const shader = sel(p, "shader", "");
+  if (!shader || shader === "soft") return "";
+  return `${indent}/* Editor shader preset "${shader}" uses a colorNode; add one here to exactly match the preview. */\n`;
+}
+
+function gradientLiteral(
+  p: Params,
+  key: string,
+  fallback: { t: number; color: [number, number, number, number] }[],
+): string {
+  const v = p[key];
+  let stops: { t: number; color: [number, number, number, number] }[] = fallback;
+  if (
+    v &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    "kind" in v &&
+    v.kind === "gradient" &&
+    Array.isArray(v.stops)
+  ) {
+    stops = v.stops as { t: number; color: [number, number, number, number] }[];
+  }
+  const inner = stops
+    .map(
+      (s) => `{ t: ${s.t}, color: [${s.color[0]}, ${s.color[1]}, ${s.color[2]}, ${s.color[3]}] }`,
+    )
+    .join(", ");
+  return `new Gradient([${inner}])`;
+}

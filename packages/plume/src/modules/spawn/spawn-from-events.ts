@@ -3,8 +3,14 @@ import type { EmitterContext, EmitterSpawnModule, ModuleJSON } from "../module.j
 import { registerModule } from "../registry.js";
 
 export interface SpawnFromEventsParams {
-  /** The emitter whose events drive spawns. Must be constructed before this listener. */
-  source: Emitter;
+  /**
+   * The emitter whose events drive spawns. Either a built `Emitter` instance
+   * (must already exist when this module is constructed) or the string `name`
+   * of an emitter defined elsewhere in the same `SystemDef` — the System
+   * constructor resolves the name to the actual instance after every emitter
+   * has been created.
+   */
+  source: Emitter | string;
   /** Particles to emit per source event. Default 1. */
   perEvent?: number;
   /**
@@ -29,17 +35,40 @@ export class SpawnFromEvents implements EmitterSpawnModule {
   readonly kind = "emitter_spawn" as const;
   readonly type = SpawnFromEvents.type;
   readonly id?: string;
-  readonly source: Emitter;
+  /** Resolved at construction time when an `Emitter` instance is passed, or
+   *  filled in by `System` after construction when only a name was given. */
+  source!: Emitter;
+  /** When `source` was given as a string, this is the deferred name kept
+   *  around for the System to resolve. Cleared once resolved. */
+  pendingSourceName?: string;
   readonly perEvent: number;
   readonly maxEventsPerFrame: number;
   readonly inheritVelocity: boolean;
 
   constructor(params: SpawnFromEventsParams) {
-    this.source = params.source;
+    if (typeof params.source === "string") {
+      this.pendingSourceName = params.source;
+    } else {
+      this.source = params.source;
+    }
     this.perEvent = params.perEvent ?? 1;
     this.maxEventsPerFrame = params.maxEventsPerFrame ?? 64;
     this.inheritVelocity = params.inheritVelocity ?? false;
     this.id = params.id;
+  }
+
+  /** Called by `System` once every emitter is constructed. Looks up the
+   *  source by name and finishes wiring this module. */
+  resolveSource(emitters: Emitter[]): void {
+    if (!this.pendingSourceName) return;
+    const found = emitters.find((em) => em.name === this.pendingSourceName);
+    if (!found) {
+      throw new Error(
+        `SpawnFromEvents: no emitter named "${this.pendingSourceName}" in this System.`,
+      );
+    }
+    this.source = found;
+    this.pendingSourceName = undefined;
   }
 
   requestSpawn(_ctx: EmitterContext): number {

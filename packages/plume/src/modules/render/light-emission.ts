@@ -49,11 +49,17 @@ export class LightEmission implements RenderModule {
   private _readback?: Float32Array;
   private _readbackPending = false;
   private _intensityBase: number;
+  private _color: THREE.Color;
+  private _distance: number;
+  private _decay: number;
 
   constructor(params: LightEmissionParams = {}) {
     this.lightCount = Math.max(1, params.lightCount ?? 4);
     this._intensityBase = params.intensity ?? 2;
     this.intensity = this._intensityBase;
+    this._color = new THREE.Color(params.color ?? 0xffffff);
+    this._distance = params.distance ?? 5;
+    this._decay = params.decay ?? 2;
     this.id = params.id;
 
     this.object3D = new THREE.Group();
@@ -61,10 +67,10 @@ export class LightEmission implements RenderModule {
 
     for (let i = 0; i < this.lightCount; i++) {
       const light = new THREE.PointLight(
-        params.color ?? 0xffffff,
+        this._color,
         0, // start dark — positions/intensities updated on first readback
-        params.distance ?? 5,
-        params.decay ?? 2,
+        this._distance,
+        this._decay,
       );
       light.castShadow = false;
       this._lights.push(light);
@@ -132,14 +138,24 @@ export class LightEmission implements RenderModule {
       type: LightEmission.type,
       id: this.id,
       lightCount: this.lightCount,
+      color: this._color.toArray(),
       intensity: this._intensityBase,
+      distance: this._distance,
+      decay: this._decay,
     };
   }
 
   static fromJSON(data: ModuleJSON): LightEmission {
+    const colorData = data["color"];
+    const color = Array.isArray(colorData)
+      ? new THREE.Color(colorData[0] as number, colorData[1] as number, colorData[2] as number)
+      : (colorData as THREE.ColorRepresentation | undefined);
     return new LightEmission({
       lightCount: data["lightCount"] as number | undefined,
+      color,
       intensity: data["intensity"] as number | undefined,
+      distance: data["distance"] as number | undefined,
+      decay: data["decay"] as number | undefined,
       id: data.id,
     });
   }

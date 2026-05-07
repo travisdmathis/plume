@@ -1,4 +1,4 @@
-import type { EmitterDef } from "./emitter.js";
+import type { EmitterDef, EmitterEventConfig } from "./emitter.js";
 import type { SystemDef } from "./system.js";
 import type {
   EmitterSpawnModule,
@@ -25,6 +25,8 @@ export interface EmitterJSON {
   seed?: number;
   duration?: number;
   loop?: boolean;
+  events?: EmitterEventConfig;
+  sortByDepth?: boolean;
   spawn: ModuleJSON[];
   init: ModuleJSON[];
   update: ModuleJSON[];
@@ -49,6 +51,8 @@ export function emitterDefToJSON(def: EmitterDef): EmitterJSON {
     seed: def.seed,
     duration: def.duration,
     loop: def.loop,
+    events: def.events,
+    sortByDepth: def.sortByDepth,
     spawn: def.spawn.map((m) => m.toJSON()),
     init: def.init.map((m) => m.toJSON()),
     update: def.update.map((m) => m.toJSON()),
@@ -76,6 +80,8 @@ export function emitterDefFromJSON(json: EmitterJSON): EmitterDef {
     seed: json.seed,
     duration: json.duration,
     loop: json.loop,
+    events: json.events,
+    sortByDepth: json.sortByDepth,
     spawn: json.spawn.map((m) => moduleFromJSON(m) as EmitterSpawnModule),
     init: json.init.map((m) => moduleFromJSON(m) as ParticleSpawnModule),
     update: json.update.map((m) => moduleFromJSON(m) as ParticleUpdateModule),

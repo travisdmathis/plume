@@ -23,6 +23,7 @@ import { BitonicSort } from "three/examples/jsm/gpgpu/BitonicSort.js";
 
 import { ParticleBuffer, attr } from "./particle-buffer.js";
 import { RNG } from "./math/rng.js";
+import type { ScalarInput } from "./types.js";
 import type {
   EmitterContext,
   EmitterSpawnModule,
@@ -140,6 +141,7 @@ export class Emitter {
   private _aliveHighWater = 0;
   private _seeded = false;
   private readonly _initialSeed: number;
+  private readonly _retireTailSeconds: number;
   private _spawnKernel: ComputeNode;
   private _updateKernel: ComputeNode;
 
@@ -159,6 +161,7 @@ export class Emitter {
     this._seeded = def.seed !== undefined;
     this.duration = def.duration;
     this.loop = def.loop ?? false;
+    this._retireTailSeconds = estimateMaxLifetime(def.init);
 
     // Uniforms
     this.uDt = uniform(0) as UniformNode<"float", number>;
@@ -178,9 +181,13 @@ export class Emitter {
       this._resetEventKernel = this._buildResetEventKernel();
     }
 
-    // Detect event source from spawn modules
+    // Detect event source from spawn modules. When `SpawnFromEvents` was constructed
+    // with a string name (deferred cross-emitter reference), `sm.source` is undefined
+    // here — it gets populated later by `System.resolveSource()`. In that case the
+    // spawn kernel built below picks the non-event branch; `finalizeWiring()` rebuilds
+    // it once the System resolves the name.
     for (const sm of this.spawn) {
-      if (sm instanceof SpawnFromEvents) {
+      if (sm instanceof SpawnFromEvents && sm.source) {
         this._eventSource = sm.source;
         this._eventPerTrigger = sm.perEvent;
         break;
@@ -214,6 +221,24 @@ export class Emitter {
     this.render.init?.(this.buffer.storage, this.buffer.capacity, {
       sortIndices: this._sortIndices,
     });
+  }
+
+  /**
+   * Re-resolves cross-emitter event-source references and rebuilds the spawn kernel
+   * if any deferred name (string source for `SpawnFromEvents`) was resolved after
+   * construction. Called by `System` once every emitter has been built and
+   * `resolveSource()` has run on each spawn module. No-op when sources were already
+   * supplied as direct `Emitter` instances.
+   */
+  finalizeWiring(): void {
+    for (const sm of this.spawn) {
+      if (sm instanceof SpawnFromEvents && sm.source && this._eventSource !== sm.source) {
+        this._eventSource = sm.source;
+        this._eventPerTrigger = sm.perEvent;
+        this._spawnKernel = this._buildSpawnKernel();
+        return;
+      }
+    }
   }
 
   play(): void {
@@ -378,7 +403,7 @@ export class Emitter {
     }
 
     if (!this._spawning && this.duration !== undefined && !this.loop) {
-      if (this._emitterTime > this.duration + 5) {
+      if (this._emitterTime > this.duration + this._retireTailSeconds) {
         this._playing = false;
       }
     }
@@ -574,5 +599,26 @@ export class Emitter {
         });
       });
     })().compute(this.buffer.capacity);
+  }
+}
+
+function estimateMaxLifetime(initModules: ParticleSpawnModule[]): number {
+  for (const mod of initModules) {
+    if (mod.type !== "init.lifetime") continue;
+    const lifetime = (mod as unknown as { lifetime?: ScalarInput }).lifetime;
+    if (!lifetime) continue;
+    return Math.max(0.05, maxScalarInput(lifetime) + 0.1);
+  }
+  return 5;
+}
+
+function maxScalarInput(input: ScalarInput): number {
+  switch (input.kind) {
+    case "constant":
+      return input.value;
+    case "range":
+      return input.max;
+    case "list":
+      return input.values.length > 0 ? Math.max(...input.values) : 0;
   }
 }

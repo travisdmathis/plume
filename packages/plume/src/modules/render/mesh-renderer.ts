@@ -89,6 +89,7 @@ export class MeshRenderer implements RenderModule {
     const mat = this._material as NodeMaterial & {
       positionNode?: Node<"vec3"> | null;
       normalNode?: Node<"vec3"> | null;
+      colorNode?: Node | null;
     };
 
     // Capture the user's existing position/normal nodes BEFORE we override. If they set
@@ -96,6 +97,7 @@ export class MeshRenderer implements RenderModule {
     // with it: read user's local-space position first, then transform by particle.
     const userPositionNode: Node<"vec3"> | null = mat.positionNode ?? null;
     const userNormalNode: Node<"vec3"> | null = mat.normalNode ?? null;
+    const userColorNode: Node | null = mat.colorNode ?? null;
 
     // Derive a stable, pseudorandom axis per slot. Using slot index (not seed) keeps the axis
     // constant for a slot across ring-buffer reuses — visually indistinguishable from fully
@@ -155,6 +157,10 @@ export class MeshRenderer implements RenderModule {
       const localNormal: Node<"vec3"> = userNormalNode ?? normalLocal;
       return rotateByAxisAngle(localNormal, axis, cosA, sinA);
     })();
+
+    if (!userColorNode) {
+      mat.colorNode = Fn(() => storage.color.element(instanceIndex).rgb)();
+    }
 
     const mesh = new THREE.InstancedMesh(this._geometry, this._material, capacity);
     mesh.count = 0;

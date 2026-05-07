@@ -37,6 +37,23 @@ export class System {
     this.object3D.name = def.name ?? "PlumeSystem";
     this.object3D.matrixAutoUpdate = false;
     for (const em of this.emitters) this.object3D.add(em.render.object3D);
+
+    // Resolve any deferred cross-emitter references. Currently only
+    // `SpawnFromEvents` uses this — when a name string was passed instead of
+    // an Emitter instance, look up the named emitter now that they're all
+    // constructed.
+    for (const em of this.emitters) {
+      for (const mod of em.spawn) {
+        const resolver = (mod as unknown as { resolveSource?: (es: Emitter[]) => void })
+          .resolveSource;
+        if (typeof resolver === "function") {
+          resolver.call(mod, this.emitters);
+        }
+      }
+    }
+    // Now that every spawn module's source is bound, give each emitter a chance to
+    // capture it. Constructor-time wiring missed any deferred (string-name) source.
+    for (const em of this.emitters) em.finalizeWiring();
   }
 
   play(): void {
