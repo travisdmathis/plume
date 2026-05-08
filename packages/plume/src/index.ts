@@ -89,6 +89,8 @@ export { AlphaOverLife } from "./modules/update/alpha-over-life.js";
 export type { AlphaOverLifeParams } from "./modules/update/alpha-over-life.js";
 export { VelocityOverLife } from "./modules/update/velocity-over-life.js";
 export type { VelocityOverLifeParams } from "./modules/update/velocity-over-life.js";
+export { FollowPosition } from "./modules/update/follow-position.js";
+export type { FollowPositionParams } from "./modules/update/follow-position.js";
 export { TurbulenceForce } from "./modules/update/turbulence-force.js";
 export type { TurbulenceForceParams } from "./modules/update/turbulence-force.js";
 export { CurlNoiseForce } from "./modules/update/curl-noise-force.js";
@@ -129,7 +131,11 @@ export type {
 export { MeshRenderer } from "./modules/render/mesh-renderer.js";
 export type { MeshRendererParams } from "./modules/render/mesh-renderer.js";
 export { RibbonRenderer } from "./modules/render/ribbon-renderer.js";
-export type { RibbonBlendMode, RibbonRendererParams } from "./modules/render/ribbon-renderer.js";
+export type {
+  RibbonBlendMode,
+  RibbonLayerParams,
+  RibbonRendererParams,
+} from "./modules/render/ribbon-renderer.js";
 export { BeamRenderer } from "./modules/render/beam-renderer.js";
 export type { BeamBlendMode, BeamRendererParams } from "./modules/render/beam-renderer.js";
 export { LightEmission } from "./modules/render/light-emission.js";
@@ -141,7 +147,13 @@ export type { EmitterDef, EmitterEventConfig } from "./emitter.js";
 export { System } from "./system.js";
 export type { SystemDef } from "./system.js";
 export { Manager } from "./manager.js";
-export type { ManagerOptions, SpawnOptions, SystemCulling } from "./manager.js";
+export type {
+  FollowSpace,
+  FollowTarget,
+  ManagerOptions,
+  SpawnOptions,
+  SystemCulling,
+} from "./manager.js";
 
 // Serialization
 export {
@@ -158,13 +170,22 @@ export {
   emitter,
   SystemBuilder,
   EmitterBuilder,
+  TrailBuilder,
   toScalarInput,
   toVec3Input,
   toColorInput,
   toCurve,
   toGradient,
 } from "./builder.js";
-export type { ScalarLike, Vec3Like, ColorLike, CurveLike, GradientLike } from "./builder.js";
+export type {
+  ScalarLike,
+  Vec3Like,
+  ColorLike,
+  CurveLike,
+  GradientLike,
+  TrailGradientLike,
+  TrailRibbonParams,
+} from "./builder.js";
 
 // Debug helpers (R12)
 export { dumpShaders } from "./debug.js";

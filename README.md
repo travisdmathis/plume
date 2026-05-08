@@ -6,8 +6,8 @@ Particle simulation runs entirely on the GPU through three.js's TSL (Three Shadi
 Language) — spawn, update, sort, and collision all live in compute shaders. The CPU
 side is a thin orchestrator that wires compose-able modules into each emitter.
 
-**Status:** pre-1.0. Runtime package publishes as `three-plume`. API will change before
-release.
+**Status:** pre-1.0. Latest runtime release: `three-plume@0.1.1`. API will change before
+release. See [CHANGELOG.md](./CHANGELOG.md) for release notes.
 
 ## Highlights
 
@@ -24,6 +24,8 @@ release.
 - **Mesh emission** — area-weighted surface sampling, rejection-sampling volume fill.
 - **Render modules** — billboard sprites (with sub-UV animation), instanced meshes, ribbons
   (per-particle history buffer), laser-style beams, particle-driven point lights.
+- **Socket-following trails** — spawn an effect with `follow.getPosition(out)` to sample a
+  moving three.js object, bone, or gameplay socket into a fixed-capacity ribbon trail.
 - **Depth sort for alpha blending** — uses three.js's built-in
   [`BitonicSort`](https://github.com/mrdoob/three.js/blob/dev/examples/jsm/gpgpu/BitonicSort.js)
   on packed (depth, slot-index) keys.
@@ -133,6 +135,70 @@ renderer.setAnimationLoop((t) => {
 });
 ```
 
+## Socket-Following Trails
+
+Use `follow` when an effect should be authored around something that moves every frame:
+a sword tip, hand socket, projectile muzzle, wheel contact point, character bone, or any
+other `Object3D`.
+
+```ts
+manager.spawn("rising-fang", {
+  follow: {
+    space: "world",
+    getPosition: (out) => swordBladeTip.getWorldPosition(out),
+  },
+});
+```
+
+The matching prefab can be authored as a first-class trail. Plume uses one hidden trail
+head particle, pins it to the followed point, and records that head into a fixed GPU
+history buffer.
+
+```ts
+manager.register("rising-fang", () =>
+  system("rising_fang")
+    .duration(1.15)
+    .trail("blade_ribbon", (trail) =>
+      trail
+        .capacity(32)
+        .sampleRate(72)
+        .minDistance(0.025)
+        .lifetime(0.46)
+        .widthOverLife([
+          [0, 0.015],
+          [0.18, 0.16],
+          [0.62, 0.07],
+          [1, 0],
+        ])
+        .alphaOverLife([
+          [0, 0.85],
+          [0.12, 1],
+          [0.5, 0.55],
+          [1, 0],
+        ])
+        .colorOverLife([
+          [0, [1.0, 0.78, 0.32]],
+          [0.55, [0.25, 2.8, 4.8]],
+          [1, [0.8, 3.8, 5.8]],
+        ])
+        .renderRibbon({
+          blending: "additive",
+          depthTest: false,
+          faceCamera: true,
+          layers: [
+            { width: 0.22, opacity: 0.28, color: [0.25, 3.5, 5.5] },
+            { width: 0.08, opacity: 0.82, color: [5.0, 3.2, 1.2] },
+          ],
+        }),
+    )
+    .build(),
+);
+```
+
+`follow.getPosition(out)` is allocation-free when you write into `out`. `capacity` is the
+sample history length, `sampleRate` caps history writes, `minDistance` avoids oversampling
+slow sockets, and `lifetime` controls how long sampled trail points remain visible.
+
 ## Visual editor
 
 `packages/plume-editor` is now the main authoring surface for Plume effects. It compiles
@@ -184,8 +250,9 @@ Thirty+ modules across four phases of the particle lifecycle:
   `InitColor`, `InitRotation`, `InitFromMesh` (surface or volume)
 - **Update** (per-live-particle each frame): `VelocityIntegrator`, `LifetimeTick`, `Gravity`,
   `Drag`, `TurbulenceForce`, `CurlNoiseForce`, `VortexForce`, `PointAttractor`,
-  `LimitVelocity`, `ScaleBySpeed`, `ColorOverLife`, `SizeOverLife`, `AlphaOverLife`,
-  `VelocityOverLife`, `PlaneCollision`, `SphereCollision`, `DepthCollision`, `SdfCollision`
+  `FollowPosition`, `LimitVelocity`, `ScaleBySpeed`, `ColorOverLife`, `SizeOverLife`,
+  `AlphaOverLife`, `VelocityOverLife`, `PlaneCollision`, `SphereCollision`, `DepthCollision`,
+  `SdfCollision`
 - **Render**: `SpriteRenderer` (with SubUV animation), `MeshRenderer`, `RibbonRenderer`,
   `BeamRenderer`, `LightEmission`
 
@@ -213,6 +280,11 @@ with sub-emitters, seeded determinism twin, shader dump).
 | [`three-plume`](./packages/plume)           | Engine: modules, renderers, manager, serialization, TSL codegen              |
 | [`plume-editor`](./packages/plume-editor)   | Visual node editor with live preview, preset gallery, graph save/load/export |
 | [`plume-playground`](./examples/playground) | Runtime demo harness for engine features and debugging                       |
+
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for release notes. `0.1.1` adds socket-following
+ribbon trails for moving gameplay objects such as weapons, bones, sockets, and projectiles.
 
 ## Development
 

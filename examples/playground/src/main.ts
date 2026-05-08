@@ -141,6 +141,37 @@ for (const mesh of collidables) {
   depthScene.add(clone);
 }
 
+// Socket-follow demo prop. The blade tip is an Object3D so the effect can use the exact
+// API a game would use for a sword bone/socket: `bladeTip.getWorldPosition(out)`.
+const swordRig = new THREE.Group();
+const blade = new THREE.Mesh(
+  new THREE.BoxGeometry(0.08, 1.7, 0.12),
+  new THREE.MeshBasicMaterial({ color: 0xbfd8ff }),
+);
+blade.position.y = 0.85;
+const hilt = new THREE.Mesh(
+  new THREE.BoxGeometry(0.35, 0.12, 0.18),
+  new THREE.MeshBasicMaterial({ color: 0xf2b866 }),
+);
+const bladeTip = new THREE.Object3D();
+bladeTip.position.y = 1.75;
+swordRig.position.set(-1.1, 0.8, 1.1);
+swordRig.add(blade, hilt, bladeTip);
+scene.add(swordRig);
+let swordSwingStart = -10;
+
+function updateSwordRig(time: number): void {
+  const t = Math.max(0, Math.min(1, (time - swordSwingStart) / 1.1));
+  const ease = 1 - Math.pow(1 - t, 3);
+  const idle = Math.sin(time * 1.6) * 0.08;
+  swordRig.rotation.set(
+    -0.4 + Math.sin(ease * Math.PI) * 0.9,
+    -0.7 + ease * 1.6 + idle,
+    1.25 - ease * 2.7,
+  );
+  swordRig.position.y = 0.8 + Math.sin(ease * Math.PI) * 0.35;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Post-processing: HDR + bloom (TSL graph)
 // ────────────────────────────────────────────────────────────────────────────
@@ -476,6 +507,47 @@ function cometTrailsDef(): SystemDef {
           width: 0.18,
           blending: "additive",
           renderOrder: 10,
+        }),
+    )
+    .build();
+}
+
+/** Socket-following blade trail — one ribbon head follows a moving Object3D socket. */
+function risingFangDef(): SystemDef {
+  return system("rising_fang")
+    .duration(1.15)
+    .trail("blade_ribbon", (trail) =>
+      trail
+        .capacity(32)
+        .sampleRate(72)
+        .minDistance(0.025)
+        .lifetime(0.46)
+        .widthOverLife([
+          [0, 0.015],
+          [0.18, 0.16],
+          [0.62, 0.07],
+          [1, 0],
+        ])
+        .alphaOverLife([
+          [0, 0.85],
+          [0.12, 1],
+          [0.5, 0.55],
+          [1, 0],
+        ])
+        .colorOverLife([
+          [0, [1.0, 0.78, 0.32]],
+          [0.55, [0.25, 2.8, 4.8]],
+          [1, [0.8, 3.8, 5.8]],
+        ])
+        .renderRibbon({
+          blending: "additive",
+          depthTest: false,
+          faceCamera: true,
+          renderOrder: 24,
+          layers: [
+            { width: 0.22, opacity: 0.28, color: [0.25, 3.5, 5.5] },
+            { width: 0.08, opacity: 0.82, color: [5.0, 3.2, 1.2] },
+          ],
         }),
     )
     .build();
@@ -1158,6 +1230,7 @@ manager.register("magic_orb", magicOrbDef);
 manager.register("sparkle_fountain", sparkleFountainDef);
 manager.register("debris", debrisDef);
 manager.register("comet_trails", cometTrailsDef);
+manager.register("rising_fang", risingFangDef);
 manager.register("tornado", tornadoDef);
 manager.register("plasma_beams", plasmaBeamsDef);
 manager.register("ember_swarm", emberSwarmDef);
@@ -1222,6 +1295,16 @@ document
   .addEventListener("click", () =>
     manager.spawn("comet_trails", { position: new THREE.Vector3(0, 1.5, 0) }),
   );
+document.getElementById("btn-socket-trail")!.addEventListener("click", () => {
+  swordSwingStart = performance.now() / 1000;
+  manager.spawn("rising_fang", {
+    follow: {
+      space: "world",
+      getPosition: (out) => bladeTip.getWorldPosition(out),
+    },
+    lod: { bounds: 2.5, farFadeStart: 18, maxDistance: 28 },
+  });
+});
 document
   .getElementById("btn-tornado")!
   .addEventListener("click", () =>
@@ -1553,6 +1636,7 @@ function tick(timestamp?: number) {
   timer.update(timestamp);
   const dt = Math.min(timer.getDelta(), 1 / 30);
   controls.update();
+  updateSwordRig(performance.now() / 1000);
 
   // Depth pre-pass: render the collidables-only scene into `depthRT` BEFORE `manager.tick()`
   // so `DepthCollision` samples this frame's depth (not last frame's). Restoring target=null

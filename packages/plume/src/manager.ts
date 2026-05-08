@@ -62,12 +62,29 @@ export interface SystemCulling {
   maxDistance?: number;
 }
 
+export type FollowSpace = "world" | "local";
+
+export interface FollowTarget {
+  /**
+   * Coordinate space of the returned position. `"world"` means `getPosition` already returns
+   * a world-space socket point. `"local"` means the point is local to `parent` (or `scene`).
+   * Default `"world"`.
+   */
+  space?: FollowSpace;
+  /**
+   * Write the current socket position into `out` and optionally return it. Reusing `out`
+   * keeps the Manager path allocation-free.
+   */
+  getPosition(out: THREE.Vector3): THREE.Vector3Like | void;
+}
+
 export interface SpawnOptions {
   position?: THREE.Vector3Like;
   quaternion?: THREE.QuaternionLike;
   scale?: THREE.Vector3Like | number;
   intensity?: number;
   parent?: THREE.Object3D;
+  follow?: FollowTarget;
   /** Distance-based LOD + frustum culling config. See {@link SystemCulling}. */
   lod?: SystemCulling;
 }
@@ -76,6 +93,8 @@ interface ActiveEntry {
   id: string;
   system: System;
   lod?: SystemCulling;
+  follow?: FollowTarget;
+  parent: THREE.Object3D;
 }
 
 /**
@@ -104,6 +123,7 @@ export class Manager {
   private _cullSphere = new THREE.Sphere();
   private _cameraWorldPos = new THREE.Vector3();
   private _systemWorldPos = new THREE.Vector3();
+  private _followWorldPos = new THREE.Vector3();
   // Shared compute batch; cleared + refilled each step, flushed as one `computeAsync`.
   private _batchBuffer: ComputeNode[] = [];
 
@@ -279,7 +299,9 @@ export class Manager {
     parent.add(system.object3D);
 
     system.play();
-    this._active.push({ id, system, lod: options.lod });
+    const entry: ActiveEntry = { id, system, lod: options.lod, follow: options.follow, parent };
+    this._syncFollow(entry);
+    this._active.push(entry);
     return system;
   }
 
@@ -336,6 +358,7 @@ export class Manager {
     for (let i = this._active.length - 1; i >= 0; i--) {
       const entry = this._active[i]!;
       const sys = entry.system;
+      this._syncFollow(entry);
 
       // LOD: compute intensity scale + visibility from distance and frustum. Systems without
       // a `lod` config just get `intensity` straight through and stay visible.
@@ -409,5 +432,24 @@ export class Manager {
       this._pool.set(id, pool);
     }
     return pool;
+  }
+
+  private _syncFollow(entry: ActiveEntry): void {
+    const { follow, parent, system } = entry;
+    if (!follow) {
+      system.setFollowPosition(system.position, false);
+      return;
+    }
+
+    const returned = follow.getPosition(this._followWorldPos);
+    if (returned) this._followWorldPos.set(returned.x, returned.y, returned.z);
+
+    if ((follow.space ?? "world") === "local") {
+      parent.updateMatrixWorld(true);
+      parent.localToWorld(this._followWorldPos);
+    }
+
+    system.position.copy(this._followWorldPos);
+    system.setFollowPosition(this._followWorldPos, true);
   }
 }

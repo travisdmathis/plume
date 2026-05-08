@@ -1,6 +1,6 @@
 {
   "name": "three-plume",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "GPU-first, Niagara-style VFX system for three.js. Particle simulation in compute shaders via TSL.",
   "keywords": [
     "three",
@@ -38,6 +38,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "sideEffects": [

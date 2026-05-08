@@ -87,6 +87,10 @@ export class System {
     this.intensity = Math.max(0, value);
   }
 
+  setFollowPosition(position: THREE.Vector3, hasFollow: boolean): void {
+    for (const em of this.emitters) em.setFollowPosition(position, hasFollow);
+  }
+
   /**
    * Update all emitters. Renderer is passed through for GPU compute dispatch.
    *

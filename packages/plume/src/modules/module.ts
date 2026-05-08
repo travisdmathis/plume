@@ -106,13 +106,20 @@ export interface RenderModule extends ModuleBase {
   readonly kind: "render";
   readonly object3D: THREE.Object3D;
   init?(storage: ParticleStorage, capacity: number, opts?: RenderInitOptions): void;
+  reset?(): void;
   updateRender(liveCount: number, ctx: RenderContext): void;
+  setFollowPosition?(position: THREE.Vector3, hasFollow: boolean): void;
   /**
    * Optional compute dispatch called by the Emitter after its main update + spawn kernels.
    * Used by renderers that need per-frame compute work — e.g., `RibbonRenderer` captures each
    * alive particle's current position into a per-slot history buffer.
    */
-  postUpdate?(renderer: WebGPURenderer, liveCount: number): void;
+  postUpdate?(
+    renderer: WebGPURenderer,
+    liveCount: number,
+    deltaTime: number,
+    emitterTime: number,
+  ): void;
   dispose(): void;
 }
 

@@ -4,7 +4,8 @@ GPU-first, Niagara-style VFX system for [three.js](https://threejs.org). Particl
 simulation runs entirely in compute shaders through three's TSL (Three Shading Language);
 the CPU orchestrates composable modules, the GPU does all the per-particle work.
 
-**Pre-1.0** — API may change before release.
+**Pre-1.0** — latest release `0.1.1`; API may change before release. See
+[CHANGELOG.md](./CHANGELOG.md).
 
 ## Add to a three.js project
 
@@ -110,14 +111,68 @@ renderer.setAnimationLoop(() => {
 - Texture + shader hooks across renderers: multi-texture maps, custom TSL `colorNode`
   callbacks, flowmap force fields, sprite-sheet animation, ribbons, beams, instanced
   meshes, and particle-driven lights.
+- Socket-following ribbon trails: `manager.spawn(id, { follow })` samples a moving three.js
+  object, bone, or gameplay socket into a fixed GPU history buffer with width, alpha, color,
+  sample-rate, min-distance, and layered glow controls.
 - JSON serialization for system definitions, including event emitters, depth sorting, and
   light renderer settings.
 - Shader dump for debugging the generated WGSL.
 
+## Socket-following trail
+
+```ts
+manager.register("rising-fang", () =>
+  system("rising_fang")
+    .duration(1.15)
+    .trail("blade_ribbon", (trail) =>
+      trail
+        .capacity(32)
+        .sampleRate(72)
+        .minDistance(0.025)
+        .lifetime(0.46)
+        .widthOverLife([
+          [0, 0.015],
+          [0.18, 0.16],
+          [0.62, 0.07],
+          [1, 0],
+        ])
+        .alphaOverLife([
+          [0, 0.85],
+          [0.12, 1],
+          [0.5, 0.55],
+          [1, 0],
+        ])
+        .colorOverLife([
+          [0, [1.0, 0.78, 0.32]],
+          [0.55, [0.25, 2.8, 4.8]],
+          [1, [0.8, 3.8, 5.8]],
+        ])
+        .renderRibbon({
+          blending: "additive",
+          depthTest: false,
+          faceCamera: true,
+          layers: [
+            { width: 0.22, opacity: 0.28, color: [0.25, 3.5, 5.5] },
+            { width: 0.08, opacity: 0.82, color: [5.0, 3.2, 1.2] },
+          ],
+        }),
+    )
+    .build(),
+);
+
+manager.spawn("rising-fang", {
+  follow: {
+    space: "world",
+    getPosition: (out) => swordBladeTip.getWorldPosition(out),
+  },
+});
+```
+
 ## Exports
 
 - `Manager`, `System`, `Emitter` — orchestration classes.
-- `system(name)`, `emitter(name)` — fluent builder entry points.
+- `system(name)`, `emitter(name)` — fluent builder entry points, including
+  `system().trail(...)` for socket-following ribbon trails.
 - All module classes (`SpawnRate`, `Gravity`, `DepthCollision`, `SpriteRenderer`, …).
 - SDF primitives: `sdfSphere`, `sdfBox`, `sdfPlane`, `sdfUnion`, `sdfIntersect`, `sdfSubtract`.
 - Serialization: `systemDefToJSON`, `systemDefFromJSON`.

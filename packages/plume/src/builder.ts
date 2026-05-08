@@ -37,7 +37,14 @@
 import { Curve1D, type CurveKeyframe } from "./math/curve.js";
 import { Gradient, type GradientStop } from "./math/gradient.js";
 import type { EmissionShape } from "./math/shapes.js";
-import type { ColorInput, ColorTuple, ScalarInput, Vec3Input, Vec3Tuple } from "./types.js";
+import type {
+  ColorInput,
+  ColorRGBATuple,
+  ColorTuple,
+  ScalarInput,
+  Vec3Input,
+  Vec3Tuple,
+} from "./types.js";
 import type { EmitterDef, EmitterEventConfig } from "./emitter.js";
 import type { SystemDef } from "./system.js";
 import type {
@@ -82,12 +89,17 @@ import { TurbulenceForce, type TurbulenceForceParams } from "./modules/update/tu
 import { VelocityIntegrator } from "./modules/update/velocity-integrator.js";
 import { VelocityOverLife } from "./modules/update/velocity-over-life.js";
 import { VortexForce, type VortexForceParams } from "./modules/update/vortex-force.js";
+import { FollowPosition } from "./modules/update/follow-position.js";
 
 // Render modules
 import { BeamRenderer, type BeamRendererParams } from "./modules/render/beam-renderer.js";
 import { LightEmission, type LightEmissionParams } from "./modules/render/light-emission.js";
 import { MeshRenderer, type MeshRendererParams } from "./modules/render/mesh-renderer.js";
-import { RibbonRenderer, type RibbonRendererParams } from "./modules/render/ribbon-renderer.js";
+import {
+  RibbonRenderer,
+  type RibbonLayerParams,
+  type RibbonRendererParams,
+} from "./modules/render/ribbon-renderer.js";
 import { SpriteRenderer, type SpriteRendererParams } from "./modules/render/sprite-renderer.js";
 
 // ─ Input shorthand helpers ──────────────────────────────────────────────────
@@ -108,6 +120,20 @@ export type ColorLike = ColorTuple | { min: ColorTuple; max: ColorTuple } | Colo
 export type CurveLike = Curve1D | number | [number, number][] | CurveKeyframe[];
 /** Gradient input. Accepts an existing `Gradient` or an array of stops. */
 export type GradientLike = Gradient | GradientStop[];
+export type TrailGradientLike =
+  | Gradient
+  | Array<GradientStop | [number, ColorTuple | ColorRGBATuple]>;
+export type TrailRibbonParams = Omit<
+  RibbonRendererParams,
+  | "historyLength"
+  | "sampleRate"
+  | "minDistance"
+  | "sampleLifetime"
+  | "sampleUntil"
+  | "widthOverLife"
+  | "alphaOverLife"
+  | "colorOverLife"
+>;
 
 function isScalarInput(v: unknown): v is ScalarInput {
   return typeof v === "object" && v !== null && "kind" in v;
@@ -153,6 +179,20 @@ export function toCurve(input: CurveLike): Curve1D {
 export function toGradient(input: GradientLike): Gradient {
   if (input instanceof Gradient) return input;
   return new Gradient(input);
+}
+
+function toTrailGradient(input: TrailGradientLike): Gradient {
+  if (input instanceof Gradient) return input;
+  return new Gradient(
+    input.map((stop) => {
+      if (!Array.isArray(stop)) return stop;
+      const [t, color] = stop;
+      return {
+        t,
+        color: color.length === 4 ? color : [color[0], color[1], color[2], 1],
+      };
+    }),
+  );
 }
 
 // ─ Emitter builder ──────────────────────────────────────────────────────────
@@ -299,6 +339,10 @@ export class EmitterBuilder {
     this._update.push(new VelocityOverLife({ curve: toCurve(curve) }));
     return this;
   }
+  followPosition(): this {
+    this._update.push(new FollowPosition());
+    return this;
+  }
   turbulence(params: TurbulenceForceParams): this {
     this._update.push(new TurbulenceForce(params));
     return this;
@@ -394,6 +438,87 @@ export class EmitterBuilder {
   }
 }
 
+// ─ Socket-following trail builder ─────────────────────────────────────────
+
+export class TrailBuilder {
+  private _name?: string;
+  private _capacity = 32;
+  private _sampleRate = 60;
+  private _minDistance = 0;
+  private _lifetime = 1;
+  private _widthOverLife = Curve1D.linear(0.1, 0);
+  private _alphaOverLife = Curve1D.linear(1, 0);
+  private _colorOverLife = Gradient.constant([1, 1, 1, 1]);
+  private _renderParams: TrailRibbonParams = {};
+
+  constructor(name?: string) {
+    this._name = name;
+  }
+
+  name(value: string): this {
+    this._name = value;
+    return this;
+  }
+  capacity(value: number): this {
+    this._capacity = Math.max(2, Math.floor(value));
+    return this;
+  }
+  sampleRate(value: number): this {
+    this._sampleRate = Math.max(0, value);
+    return this;
+  }
+  minDistance(value: number): this {
+    this._minDistance = Math.max(0, value);
+    return this;
+  }
+  lifetime(seconds: number): this {
+    this._lifetime = Math.max(0.001, seconds);
+    return this;
+  }
+  widthOverLife(curve: CurveLike): this {
+    this._widthOverLife = toCurve(curve);
+    return this;
+  }
+  alphaOverLife(curve: CurveLike): this {
+    this._alphaOverLife = toCurve(curve);
+    return this;
+  }
+  colorOverLife(gradient: TrailGradientLike): this {
+    this._colorOverLife = toTrailGradient(gradient);
+    return this;
+  }
+  renderRibbon(params: TrailRibbonParams & { layers?: RibbonLayerParams[] } = {}): this {
+    this._renderParams = params;
+    return this;
+  }
+
+  build(systemDuration?: number): EmitterDef {
+    const trailLifetime = this._lifetime;
+    const headLifetime = Math.max(0.05, (systemDuration ?? trailLifetime) + trailLifetime + 0.1);
+    return new EmitterBuilder(this._name)
+      .capacity(1)
+      .duration(0.001)
+      .spawnBurst({ time: 0, count: 1 })
+      .lifetime(headLifetime)
+      .position({ shape: { kind: "point" } })
+      .size(1)
+      .color([1, 1, 1], { alpha: 1 })
+      .followPosition()
+      .renderRibbon({
+        ...this._renderParams,
+        historyLength: this._capacity,
+        sampleRate: this._sampleRate,
+        minDistance: this._minDistance,
+        sampleLifetime: trailLifetime,
+        sampleUntil: systemDuration,
+        widthOverLife: this._widthOverLife,
+        alphaOverLife: this._alphaOverLife,
+        colorOverLife: this._colorOverLife,
+      })
+      .build();
+  }
+}
+
 // ─ System builder ──────────────────────────────────────────────────────────
 
 export class SystemBuilder {
@@ -401,6 +526,7 @@ export class SystemBuilder {
   private _duration?: number;
   private _loop?: boolean;
   private _emitters: EmitterDef[] = [];
+  private _trailFactories: Array<(systemDuration?: number) => EmitterDef> = [];
 
   constructor(name?: string) {
     this._name = name;
@@ -456,8 +582,26 @@ export class SystemBuilder {
     return this;
   }
 
+  trail(name: string, build: (trail: TrailBuilder) => TrailBuilder): this;
+  trail(build: (trail: TrailBuilder) => TrailBuilder): this;
+  trail(
+    arg1: string | ((trail: TrailBuilder) => TrailBuilder),
+    arg2?: (trail: TrailBuilder) => TrailBuilder,
+  ): this {
+    const name = typeof arg1 === "string" ? arg1 : undefined;
+    const build = typeof arg1 === "string" ? arg2 : arg1;
+    if (!build) throw new Error("plume: .trail(name, build) requires a build callback");
+    const trail = build(new TrailBuilder(name));
+    this._trailFactories.push((duration) => trail.build(duration));
+    return this;
+  }
+
   build(): SystemDef {
-    if (this._emitters.length === 0) {
+    const emitters = [
+      ...this._emitters,
+      ...this._trailFactories.map((factory) => factory(this._duration)),
+    ];
+    if (emitters.length === 0) {
       throw new Error(
         `plume: system${this._name ? ` "${this._name}"` : ""} has no emitters; call .emitter(...) at least once before build()`,
       );
@@ -466,7 +610,7 @@ export class SystemBuilder {
       name: this._name,
       duration: this._duration,
       loop: this._loop,
-      emitters: this._emitters,
+      emitters,
     };
   }
 }

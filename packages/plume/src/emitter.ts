@@ -241,12 +241,23 @@ export class Emitter {
     }
   }
 
+  setFollowPosition(position: THREE.Vector3, hasFollow: boolean): void {
+    for (const m of this.update) {
+      const follower = m as unknown as {
+        setFollowPosition?: (position: THREE.Vector3, hasFollow: boolean) => void;
+      };
+      follower.setFollowPosition?.(position, hasFollow);
+    }
+    this.render.setFollowPosition?.(position, hasFollow);
+  }
+
   play(): void {
     this._emitterTime = 0;
     this._playing = true;
     this._spawning = true;
     this._ringHead = 0;
     this._aliveHighWater = 0;
+    this.render.reset?.();
     // For seeded emitters, reset the RNG to its initial seed so every play() produces the
     // same particle stream given the same tick cadence. For non-seeded emitters, leave the
     // RNG state as-is so pooled instances don't repeat across respawns.
@@ -262,6 +273,7 @@ export class Emitter {
     this._spawning = false;
     this._playing = false;
     this._aliveHighWater = 0;
+    this.render.reset?.();
   }
 
   isAlive(): boolean {
@@ -383,15 +395,22 @@ export class Emitter {
       }
     }
 
-    // If we own the batch (no caller-provided one), fire it now. Otherwise leave it to
-    // the caller to flush after every emitter has contributed its kernels.
-    if (ownsBatch && dispatch.length > 0) void renderer.computeAsync(dispatch);
+    // If we own the batch (no caller-provided one), fire it now. When a render module has
+    // post-update work (ribbon history, light readback), flush the shared batch before that
+    // hook too so it observes the just-updated particle state instead of the previous frame.
+    if (this.render.postUpdate && this._aliveHighWater > 0 && !ownsBatch && dispatch.length > 0) {
+      const prePostUpdate = dispatch.slice();
+      dispatch.length = 0;
+      void renderer.computeAsync(prePostUpdate);
+    } else if (ownsBatch && dispatch.length > 0) {
+      void renderer.computeAsync(dispatch);
+    }
 
     // Post-update hook for render modules that need per-frame compute work (e.g., ribbons).
     // These own their own `computeAsync` call because they dispatch conditionally on internal
     // state (history head, readback readiness) that the emitter can't observe.
     if (this.render.postUpdate && this._aliveHighWater > 0) {
-      this.render.postUpdate(renderer, this._aliveHighWater);
+      this.render.postUpdate(renderer, this._aliveHighWater, deltaTime, this._emitterTime);
     }
 
     // Depth-sort pass — runs after all state updates, before render draws this frame.
